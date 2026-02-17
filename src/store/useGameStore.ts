@@ -72,6 +72,11 @@ interface GameStore {
     winner: ZoneId;
     scores: Record<ZoneId, ZoneScoreData>;
   }) => void;
+  handlePastWinners: (winners: {
+    roundNumber: number;
+    winnerZone: ZoneId;
+    endedAt: string;
+  }[]) => void;
 }
 
 function defaultMultipliers(): Record<ZoneId, number> {
@@ -292,5 +297,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
       userBets: updatedBets,
       screenFlash: true,
     });
+  },
+
+  handlePastWinners: (winners) => {
+    const results: RoundResult[] = winners.map((w) => ({
+      roundId: w.roundNumber,
+      winnerZone: w.winnerZone,
+      totalPool: 0,
+      timestamp: new Date(w.endedAt).getTime(),
+    }));
+    set({ roundResults: results });
   },
 }));

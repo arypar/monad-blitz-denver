@@ -1,11 +1,12 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { config } from "./config.js";
-import { getCurrentRoundState } from "./rounds.js";
+import { getCurrentRoundState, getPastWinners } from "./rounds.js";
 import type {
   ClassifiedTransaction,
   ClassifiedTransactionMessage,
   RoundStartMessage,
   RoundEndMessage,
+  PastWinnersMessage,
   ZoneId,
   ZoneScore,
 } from "./types.js";
@@ -19,7 +20,7 @@ export function startServer(): WebSocketServer {
     console.log(`[server] WebSocket server listening on ws://localhost:${config.wsPort}`);
   });
 
-  wss.on("connection", (ws, req) => {
+  wss.on("connection", async (ws, req) => {
     const clientAddr = req.socket.remoteAddress ?? "unknown";
     console.log(`[server] client connected: ${clientAddr}`);
 
@@ -36,6 +37,19 @@ export function startServer(): WebSocketServer {
         },
       };
       ws.send(JSON.stringify(msg));
+    }
+
+    try {
+      const winners = await getPastWinners(10);
+      if (winners.length > 0) {
+        const msg: PastWinnersMessage = {
+          type: "past_winners",
+          data: { winners },
+        };
+        ws.send(JSON.stringify(msg));
+      }
+    } catch (err) {
+      console.error("[server] failed to fetch past winners:", err);
     }
 
     ws.on("close", () => {

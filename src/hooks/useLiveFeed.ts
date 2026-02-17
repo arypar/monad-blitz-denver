@@ -39,7 +39,14 @@ interface RoundEndMessage {
   };
 }
 
-type WsMessage = ClassifiedTxMessage | RoundStartMessage | RoundEndMessage | { type: string };
+interface PastWinnersMessage {
+  type: "past_winners";
+  data: {
+    winners: { roundNumber: number; winnerZone: ZoneId; endedAt: string }[];
+  };
+}
+
+type WsMessage = ClassifiedTxMessage | RoundStartMessage | RoundEndMessage | PastWinnersMessage | { type: string };
 
 export function useLiveFeed() {
   const addTransaction = useGameStore((s) => s.addTransaction);
@@ -47,6 +54,7 @@ export function useLiveFeed() {
   const tickChart = useGameStore((s) => s.tickChart);
   const handleRoundStart = useGameStore((s) => s.handleRoundStart);
   const handleRoundEnd = useGameStore((s) => s.handleRoundEnd);
+  const handlePastWinners = useGameStore((s) => s.handlePastWinners);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -87,6 +95,9 @@ export function useLiveFeed() {
           } else if (msg.type === "round_end") {
             const d = (msg as RoundEndMessage).data;
             handleRoundEnd(d);
+          } else if (msg.type === "past_winners") {
+            const d = (msg as PastWinnersMessage).data;
+            handlePastWinners(d.winners);
           }
         } catch {
           // ignore malformed messages
@@ -121,5 +132,5 @@ export function useLiveFeed() {
       clearInterval(decayInterval);
       wsRef.current?.close();
     };
-  }, [addTransaction, decayRecentCounts, tickChart, handleRoundStart, handleRoundEnd]);
+  }, [addTransaction, decayRecentCounts, tickChart, handleRoundStart, handleRoundEnd, handlePastWinners]);
 }

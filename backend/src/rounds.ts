@@ -273,6 +273,26 @@ async function endRound(): Promise<void> {
   setTimeout(() => startRound(), 4000);
 }
 
+export async function getPastWinners(limit = 10): Promise<
+  { roundNumber: number; winnerZone: ZoneId; endedAt: string }[]
+> {
+  const supabase = getSupabase();
+  const { data } = await supabase
+    .from("rounds")
+    .select("round_number, winner_zone, ended_at")
+    .not("winner_zone", "is", null)
+    .order("round_number", { ascending: false })
+    .limit(limit);
+
+  if (!data) return [];
+
+  return data.map((r) => ({
+    roundNumber: r.round_number,
+    winnerZone: r.winner_zone as ZoneId,
+    endedAt: r.ended_at,
+  }));
+}
+
 export function stopRounds(): void {
   if (state.timer) {
     clearTimeout(state.timer);

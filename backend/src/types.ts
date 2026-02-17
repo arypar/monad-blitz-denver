@@ -67,3 +67,10 @@ export interface RoundEndMessage {
     scores: Record<ZoneId, ZoneScore>;
   };
 }
+
+export interface PastWinnersMessage {
+  type: "past_winners";
+  data: {
+    winners: { roundNumber: number; winnerZone: ZoneId; endedAt: string }[];
+  };
+}
