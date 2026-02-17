@@ -1,4 +1,4 @@
-export type ZoneId = "kuru" | "apriori" | "nadfun" | "curvance" | "monorail" | "apuff";
+export type ZoneId = "pepperoni" | "mushroom" | "pineapple" | "olive" | "anchovy";
 
 export interface Zone {
   id: ZoneId;

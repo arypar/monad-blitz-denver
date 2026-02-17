@@ -1,6 +1,6 @@
 "use client";
 
-import { useMockFeed } from "@/hooks/useMockFeed";
+import { useLiveFeed } from "@/hooks/useLiveFeed";
 import { useGameStore } from "@/store/useGameStore";
 import { ZONE_LIST } from "@/lib/zones";
 import Header from "@/components/Header";
@@ -10,7 +10,7 @@ import ScreenFlash from "@/components/ScreenFlash";
 import RoundResolution from "@/components/RoundResolution";
 
 export default function Home() {
-  useMockFeed();
+  useLiveFeed();
 
   const zones = useGameStore((s) => s.zones);
   const activityHistory = useGameStore((s) => s.activityHistory);

@@ -10,12 +10,11 @@ function getZoneWeights(tick: number): Record<ZoneId, number> {
   const cycle = Math.sin(tick * 0.01);
   const cycle2 = Math.cos(tick * 0.007);
   return {
-    kuru: 3 + cycle * 1.5,
-    apriori: 2.5 + cycle2 * 1,
-    nadfun: 4 + Math.sin(tick * 0.02) * 2,
-    curvance: 2 + cycle * 0.5,
-    monorail: 1.5 + cycle2 * 0.8,
-    apuff: 2 + Math.sin(tick * 0.015) * 1,
+    pepperoni: 3 + cycle * 1.5,
+    mushroom: 2.5 + cycle2 * 1,
+    pineapple: 4 + Math.sin(tick * 0.02) * 2,
+    olive: 2 + cycle * 0.5,
+    anchovy: 1.5 + cycle2 * 0.8,
   };
 }
 

@@ -209,7 +209,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   resolveRound: () => {
     const state = get();
     let maxVol = -1;
-    let winner: ZoneId = "kuru";
+    let winner: ZoneId = "pepperoni";
     ZONE_IDS.forEach((zid) => {
       const vol = state.zones[zid].totalVolume;
       if (vol > maxVol || (vol === maxVol && Math.random() > 0.5)) {
