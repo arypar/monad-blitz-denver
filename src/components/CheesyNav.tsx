@@ -62,7 +62,14 @@ export default function CheesyNav() {
     <nav>
       <div className="logo" onClick={handleLogoClick}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/assets/cheeznad.png" alt="Cheeznad" />
+        <img 
+          src="/assets/cheeznad.png" 
+          alt="Cheeznad" 
+          style={{ 
+            transform: 'scale(3.8)', 
+            transformOrigin: 'center' 
+          }} 
+        />
       </div>
       <div className="nav-right">
         <div className="tps-pill">
