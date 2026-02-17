@@ -1,9 +1,9 @@
 import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 import { defineChain } from "viem";
 
-export const monad = defineChain({
-  id: 143,
-  name: "Monad",
+export const monadTestnet = defineChain({
+  id: 10143,
+  name: "Monad Testnet",
   nativeCurrency: {
     name: "MON",
     symbol: "MON",
@@ -11,21 +11,22 @@ export const monad = defineChain({
   },
   rpcUrls: {
     default: {
-      http: ["https://rpc.monad.xyz"],
-      webSocket: ["wss://rpc.monad.xyz"],
+      http: ["https://testnet-rpc.monad.xyz"],
+      webSocket: ["wss://testnet-rpc.monad.xyz"],
     },
   },
   blockExplorers: {
     default: {
       name: "Monad Explorer",
-      url: "https://explorer.monad.xyz",
+      url: "https://testnet.monadexplorer.com",
     },
   },
+  testnet: true,
 });
 
 export const wagmiConfig = getDefaultConfig({
   appName: "Pizza Wars",
   projectId: process.env.NEXT_PUBLIC_WC_PROJECT_ID || "demo",
-  chains: [monad],
+  chains: [monadTestnet],
   ssr: true,
 });

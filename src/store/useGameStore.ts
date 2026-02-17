@@ -34,12 +34,20 @@ export interface ActivityPoint {
   count: number;
 }
 
+export interface BlockPoint {
+  blockNumber: number;
+  count: number;
+}
+
 const MAX_CHART_POINTS = 60;
+const MAX_BLOCKS = 30;
 
 interface GameStore {
   zones: Record<ZoneId, ZoneActivity>;
   multipliers: Record<ZoneId, number>;
   activityHistory: Record<ZoneId, ActivityPoint[]>;
+  blockHistory: Record<ZoneId, BlockPoint[]>;
+  allBlocks: number[];
   transactions: Transaction[];
   maxTransactions: number;
   userBets: UserBet[];
@@ -113,10 +121,20 @@ function createFreshHistory(): Record<ZoneId, ActivityPoint[]> {
   return h;
 }
 
+function createFreshBlockHistory(): Record<ZoneId, BlockPoint[]> {
+  const h = {} as Record<ZoneId, BlockPoint[]>;
+  ZONE_IDS.forEach((id) => {
+    h[id] = [];
+  });
+  return h;
+}
+
 export const useGameStore = create<GameStore>((set, get) => ({
   zones: createFreshZones(),
   multipliers: defaultMultipliers(),
   activityHistory: createFreshHistory(),
+  blockHistory: createFreshBlockHistory(),
+  allBlocks: [],
   transactions: [],
   maxTransactions: 50,
   userBets: [],
@@ -162,6 +180,31 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const isBigBet = tx.amount >= 2;
     const newTransactions = [tx, ...state.transactions].slice(0, state.maxTransactions);
 
+    // Update block history for this zone + global block list
+    const newBlockHistory = { ...state.blockHistory };
+    let newAllBlocks = state.allBlocks;
+    if (tx.blockNumber) {
+      const bn = tx.blockNumber;
+
+      // Add to global block list if new
+      if (newAllBlocks.length === 0 || newAllBlocks[newAllBlocks.length - 1] !== bn) {
+        newAllBlocks = [...newAllBlocks, bn].slice(-MAX_BLOCKS);
+      }
+
+      // Add to zone-specific block counts
+      const zoneBlocks = [...newBlockHistory[tx.zoneId]];
+      const lastBlock = zoneBlocks[zoneBlocks.length - 1];
+      if (lastBlock && lastBlock.blockNumber === bn) {
+        zoneBlocks[zoneBlocks.length - 1] = {
+          ...lastBlock,
+          count: lastBlock.count + 1,
+        };
+      } else {
+        zoneBlocks.push({ blockNumber: bn, count: 1 });
+      }
+      newBlockHistory[tx.zoneId] = zoneBlocks.slice(-MAX_BLOCKS);
+    }
+
     set({
       zones: updatedZones,
       transactions: newTransactions,
@@ -169,6 +212,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       flashZone: tx.zoneId,
       screenFlash: isBigBet,
       lastBigBet: isBigBet ? tx : state.lastBigBet,
+      blockHistory: newBlockHistory,
+      allBlocks: newAllBlocks,
     });
   },
 
@@ -251,6 +296,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       zones: createFreshZones(multipliers),
       multipliers,
       activityHistory: createFreshHistory(),
+      blockHistory: createFreshBlockHistory(),
+      allBlocks: [],
       totalPool: 0,
       roundId: roundNumber,
       roundEndTime: endsAt,

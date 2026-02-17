@@ -3,6 +3,11 @@ export function truncateAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
+export function formatAddress(address: string): string {
+  if (address.length <= 10) return address;
+  return `${address.slice(0, 4)}..${address.slice(-4)}`;
+}
+
 export function formatMON(amount: number): string {
   if (amount >= 1000) return `${(amount / 1000).toFixed(1)}K`;
   if (amount >= 1) return amount.toFixed(2);

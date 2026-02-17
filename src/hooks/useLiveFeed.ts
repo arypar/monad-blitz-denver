@@ -86,6 +86,7 @@ export function useLiveFeed() {
               amount: Math.round(amount * 1000) / 1000,
               timestamp: Date.now(),
               type: "bet",
+              blockNumber: d.blockNumber,
             };
 
             addTransaction(tx);

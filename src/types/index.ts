@@ -8,6 +8,12 @@ export interface Zone {
   color: string;
   colorRgb: string;
   description: string;
+  protocol: string;
+  sliceImage: string;
+  sliceImageHot: string;
+  barClass: string;
+  sparkColor: string;
+  displayName: string;
 }
 
 export type HeatLevel = "cold" | "warm" | "hot" | "onfire";
@@ -31,6 +37,7 @@ export interface Transaction {
   amount: number;
   timestamp: number;
   type: "bet" | "resolve";
+  blockNumber?: number;
 }
 
 export interface UserBet {
