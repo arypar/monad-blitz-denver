@@ -53,6 +53,8 @@ interface GameStore {
   userBets: UserBet[];
   roundId: number;
   roundEndTime: number;
+  bettingEndTime: number;
+  isBettingOpen: boolean;
   totalPool: number;
   isActive: boolean;
   selectedZone: ZoneId | null;
@@ -74,11 +76,15 @@ interface GameStore {
     roundNumber: number;
     multipliers: Record<ZoneId, number>;
     endsAt: number;
+    bettingEndsAt: number;
   }) => void;
   handleRoundEnd: (data: {
     roundNumber: number;
     winner: ZoneId;
     scores: Record<ZoneId, ZoneScoreData>;
+  }) => void;
+  handleBettingClosed: (data: {
+    roundNumber: number;
   }) => void;
   handlePastWinners: (winners: {
     roundNumber: number;
@@ -140,6 +146,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   userBets: [],
   roundId: 0,
   roundEndTime: 0,
+  bettingEndTime: 0,
+  isBettingOpen: true,
   totalPool: 0,
   isActive: true,
   selectedZone: null,
@@ -291,7 +299,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   handleRoundStart: (data) => {
-    const { roundNumber, multipliers, endsAt } = data;
+    const { roundNumber, multipliers, endsAt, bettingEndsAt } = data;
     set({
       zones: createFreshZones(multipliers),
       multipliers,
@@ -301,6 +309,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       totalPool: 0,
       roundId: roundNumber,
       roundEndTime: endsAt,
+      bettingEndTime: bettingEndsAt,
+      isBettingOpen: Date.now() < bettingEndsAt,
       isResolving: false,
       lastWinner: null,
       flashZone: null,
@@ -344,6 +354,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       userBets: updatedBets,
       screenFlash: true,
     });
+  },
+
+  handleBettingClosed: () => {
+    set({ isBettingOpen: false });
   },
 
   handlePastWinners: (winners) => {

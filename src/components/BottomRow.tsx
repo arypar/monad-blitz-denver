@@ -3,23 +3,41 @@
 import { useState, useEffect } from "react";
 import { useGameStore } from "@/store/useGameStore";
 
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 export default function BottomRow() {
   const totalPool = useGameStore((s) => s.totalPool);
   const roundEndTime = useGameStore((s) => s.roundEndTime);
+  const bettingEndTime = useGameStore((s) => s.bettingEndTime);
+  const isBettingOpen = useGameStore((s) => s.isBettingOpen);
   const roundId = useGameStore((s) => s.roundId);
-  const [timeLeft, setTimeLeft] = useState(60);
+  const [roundTimeLeft, setRoundTimeLeft] = useState(180);
+  const [bettingTimeLeft, setBettingTimeLeft] = useState(60);
 
   useEffect(() => {
     const interval = setInterval(() => {
+      const now = Date.now();
+
       if (roundEndTime <= 0) {
-        setTimeLeft(0);
-        return;
+        setRoundTimeLeft(0);
+      } else {
+        const diff = Math.max(0, roundEndTime - now);
+        setRoundTimeLeft(Math.ceil(diff / 1000));
       }
-      const diff = Math.max(0, roundEndTime - Date.now());
-      setTimeLeft(Math.ceil(diff / 1000));
+
+      if (bettingEndTime <= 0) {
+        setBettingTimeLeft(0);
+      } else {
+        const diff = Math.max(0, bettingEndTime - now);
+        setBettingTimeLeft(Math.ceil(diff / 1000));
+      }
     }, 100);
     return () => clearInterval(interval);
-  }, [roundEndTime]);
+  }, [roundEndTime, bettingEndTime]);
 
   const poolDisplay =
     totalPool >= 1000
@@ -28,8 +46,10 @@ export default function BottomRow() {
       ? totalPool.toFixed(1)
       : totalPool.toFixed(2);
 
-  const urgent = timeLeft <= 15;
-  const critical = timeLeft <= 5;
+  const roundUrgent = roundTimeLeft <= 30;
+  const roundCritical = roundTimeLeft <= 10;
+  const bettingUrgent = bettingTimeLeft <= 15;
+  const bettingCritical = bettingTimeLeft <= 5;
 
   return (
     <div className="pool-banner">
@@ -44,27 +64,47 @@ export default function BottomRow() {
 
         <div className="pool-banner-divider" />
 
-        <div className={`pool-stat timer-stat${critical ? " critical" : urgent ? " urgent" : ""}`}>
+        {/* Betting Timer */}
+        <div className={`pool-stat timer-stat${isBettingOpen ? (bettingCritical ? " critical" : bettingUrgent ? " urgent" : "") : ""}`}>
+          <span className="pool-stat-label">
+            {isBettingOpen ? "Betting Open" : "Betting Closed"}
+          </span>
+          <div className="pool-stat-value-row">
+            <span className="timer-value">
+              {isBettingOpen && bettingTimeLeft > 0
+                ? formatTime(bettingTimeLeft)
+                : "—:——"}
+            </span>
+            {isBettingOpen && bettingTimeLeft > 0 && (
+              <span className={`timer-tag${bettingCritical ? " critical" : bettingUrgent ? " urgent" : ""}`}>
+                {bettingCritical ? "LAST CALL" : bettingUrgent ? "CLOSING" : "to bet"}
+              </span>
+            )}
+            {!isBettingOpen && (
+              <span className="timer-tag">LOCKED</span>
+            )}
+          </div>
+        </div>
+
+        <div className="pool-banner-divider" />
+
+        {/* Round Timer */}
+        <div className={`pool-stat timer-stat${roundCritical ? " critical" : roundUrgent ? " urgent" : ""}`}>
           <span className="pool-stat-label">
             {roundId > 0 ? `Round #${roundId}` : "Connecting..."}
           </span>
           <div className="pool-stat-value-row">
             <span className="timer-value">
-              {timeLeft > 0 ? `0:${String(timeLeft).padStart(2, "0")}` : "—:——"}
+              {roundTimeLeft > 0 ? formatTime(roundTimeLeft) : "—:——"}
             </span>
-            {timeLeft > 0 && (
-              <span className={`timer-tag${critical ? " critical" : urgent ? " urgent" : ""}`}>
-                {critical ? "LAST CALL" : urgent ? "CLOSING" : "remaining"}
+            {roundTimeLeft > 0 && (
+              <span className={`timer-tag${roundCritical ? " critical" : roundUrgent ? " urgent" : ""}`}>
+                {roundCritical ? "ENDING" : roundUrgent ? "CLOSING" : "remaining"}
               </span>
             )}
           </div>
         </div>
       </div>
-
-      {/* "Own Your Slice" CTA — commented out for now
-      <button className="own-slice-btn" onClick={...}>
-        🍕 Own Your Slice
-      </button> */}
     </div>
   );
 }

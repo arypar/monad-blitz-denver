@@ -6,6 +6,7 @@ import type {
   ClassifiedTransactionMessage,
   RoundStartMessage,
   RoundEndMessage,
+  BettingClosedMessage,
   PastWinnersMessage,
   ZoneId,
   ZoneScore,
@@ -34,6 +35,7 @@ export function startServer(): WebSocketServer {
           roundNumber: roundState.roundNumber,
           multipliers: roundState.multipliers,
           endsAt: roundState.endsAt,
+          bettingEndsAt: roundState.bettingEndsAt,
         },
       };
       ws.send(JSON.stringify(msg));
@@ -109,10 +111,26 @@ export function broadcastRoundStart(data: {
   roundNumber: number;
   multipliers: Record<ZoneId, number>;
   endsAt: number;
+  bettingEndsAt: number;
 }): void {
   if (!wss) return;
 
   const msg: RoundStartMessage = { type: "round_start", data };
+  const payload = JSON.stringify(msg);
+
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(payload);
+    }
+  });
+}
+
+export function broadcastBettingClosed(data: {
+  roundNumber: number;
+}): void {
+  if (!wss) return;
+
+  const msg: BettingClosedMessage = { type: "betting_closed", data };
   const payload = JSON.stringify(msg);
 
   wss.clients.forEach((client) => {

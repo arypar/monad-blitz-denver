@@ -58,6 +58,14 @@ export interface RoundStartMessage {
     roundNumber: number;
     multipliers: Record<ZoneId, number>;
     endsAt: number;
+    bettingEndsAt: number;
+  };
+}
+
+export interface BettingClosedMessage {
+  type: "betting_closed";
+  data: {
+    roundNumber: number;
   };
 }
 

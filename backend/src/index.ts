@@ -1,7 +1,7 @@
 import { config } from "./config.js";
 import { createMonadClient, watchNewBlocks } from "./monitor.js";
 import { classifyBlock } from "./classifier.js";
-import { startServer, broadcast, broadcastRoundStart, broadcastRoundEnd, getClientCount } from "./server.js";
+import { startServer, broadcast, broadcastRoundStart, broadcastRoundEnd, broadcastBettingClosed, getClientCount } from "./server.js";
 import { initRegistry, getRegistrySize } from "./registry.js";
 import { initSupabase } from "./supabase.js";
 import { setRoundCallbacks, startRound, accumulateTx, stopRounds } from "./rounds.js";
@@ -73,6 +73,7 @@ async function main() {
   setRoundCallbacks(
     (data) => broadcastRoundStart(data),
     (data) => broadcastRoundEnd(data),
+    (data) => broadcastBettingClosed(data),
   );
 
   console.log("");

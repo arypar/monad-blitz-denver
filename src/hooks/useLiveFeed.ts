@@ -27,6 +27,14 @@ interface RoundStartMessage {
     roundNumber: number;
     multipliers: Record<ZoneId, number>;
     endsAt: number;
+    bettingEndsAt: number;
+  };
+}
+
+interface BettingClosedMessage {
+  type: "betting_closed";
+  data: {
+    roundNumber: number;
   };
 }
 
@@ -46,7 +54,7 @@ interface PastWinnersMessage {
   };
 }
 
-type WsMessage = ClassifiedTxMessage | RoundStartMessage | RoundEndMessage | PastWinnersMessage | { type: string };
+type WsMessage = ClassifiedTxMessage | RoundStartMessage | RoundEndMessage | BettingClosedMessage | PastWinnersMessage | { type: string };
 
 export function useLiveFeed() {
   const addTransaction = useGameStore((s) => s.addTransaction);
@@ -54,6 +62,7 @@ export function useLiveFeed() {
   const tickChart = useGameStore((s) => s.tickChart);
   const handleRoundStart = useGameStore((s) => s.handleRoundStart);
   const handleRoundEnd = useGameStore((s) => s.handleRoundEnd);
+  const handleBettingClosed = useGameStore((s) => s.handleBettingClosed);
   const handlePastWinners = useGameStore((s) => s.handlePastWinners);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -96,6 +105,9 @@ export function useLiveFeed() {
           } else if (msg.type === "round_end") {
             const d = (msg as RoundEndMessage).data;
             handleRoundEnd(d);
+          } else if (msg.type === "betting_closed") {
+            const d = (msg as BettingClosedMessage).data;
+            handleBettingClosed(d);
           } else if (msg.type === "past_winners") {
             const d = (msg as PastWinnersMessage).data;
             handlePastWinners(d.winners);
@@ -133,5 +145,5 @@ export function useLiveFeed() {
       clearInterval(decayInterval);
       wsRef.current?.close();
     };
-  }, [addTransaction, decayRecentCounts, tickChart, handleRoundStart, handleRoundEnd, handlePastWinners]);
+  }, [addTransaction, decayRecentCounts, tickChart, handleRoundStart, handleRoundEnd, handleBettingClosed, handlePastWinners]);
 }

@@ -20,6 +20,8 @@ export default function BettingModal({
   const placeBet = useGameStore((s) => s.placeBet);
   const zones = useGameStore((s) => s.zones);
   const isResolving = useGameStore((s) => s.isResolving);
+  const isBettingOpen = useGameStore((s) => s.isBettingOpen);
+  const bettingDisabled = isResolving || !isBettingOpen;
 
   const [selectedZones, setSelectedZones] = useState<Set<ZoneId>>(new Set());
   const [amount, setAmount] = useState("500");
@@ -61,13 +63,13 @@ export default function BettingModal({
   );
 
   const handlePlaceBet = useCallback(() => {
-    if (isResolving || amtNum <= 0 || numSelected === 0) return;
+    if (bettingDisabled || amtNum <= 0 || numSelected === 0) return;
     const perZone = amtNum / numSelected;
     selectedZones.forEach((zoneId) => {
       placeBet(zoneId, perZone);
     });
     onClose();
-  }, [isResolving, amtNum, numSelected, selectedZones, placeBet, onClose]);
+  }, [bettingDisabled, amtNum, numSelected, selectedZones, placeBet, onClose]);
 
   const handleOverlayClick = useCallback(
     (e: React.MouseEvent) => {
@@ -88,6 +90,11 @@ export default function BettingModal({
           ✕
         </button>
         <div className="modal-title">make your own slice 🍕</div>
+        {!isBettingOpen && (
+          <div className="modal-sub" style={{ color: "#e63946", fontWeight: 600 }}>
+            Betting is closed for this round. Wait for the next round to place bets.
+          </div>
+        )}
         <div className="modal-sub">
           Pick your toppings to hedge across zones. Win proportionally when any
           selected zone runs hot.
@@ -150,8 +157,8 @@ export default function BettingModal({
               min="0"
             />
           </div>
-          <button className="modal-buy" onClick={handlePlaceBet} disabled={isResolving || amtNum <= 0 || numSelected === 0}>
-            Place Bet
+          <button className="modal-buy" onClick={handlePlaceBet} disabled={bettingDisabled || amtNum <= 0 || numSelected === 0}>
+            {isBettingOpen ? "Place Bet" : "Betting Closed"}
           </button>
         </div>
 

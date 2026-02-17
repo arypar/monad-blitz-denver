@@ -15,19 +15,26 @@ interface RoundState {
   volumes: Record<ZoneId, number>;
   startedAt: number;
   endsAt: number;
+  bettingEndsAt: number;
   timer: ReturnType<typeof setTimeout> | null;
+  bettingTimer: ReturnType<typeof setTimeout> | null;
 }
 
 type RoundStartCallback = (data: {
   roundNumber: number;
   multipliers: Record<ZoneId, number>;
   endsAt: number;
+  bettingEndsAt: number;
 }) => void;
 
 type RoundEndCallback = (data: {
   roundNumber: number;
   winner: ZoneId;
   scores: Record<ZoneId, ZoneScore>;
+}) => void;
+
+type BettingClosedCallback = (data: {
+  roundNumber: number;
 }) => void;
 
 let state: RoundState = {
@@ -38,11 +45,14 @@ let state: RoundState = {
   volumes: freshCounts(),
   startedAt: 0,
   endsAt: 0,
+  bettingEndsAt: 0,
   timer: null,
+  bettingTimer: null,
 };
 
 let onRoundStart: RoundStartCallback | null = null;
 let onRoundEnd: RoundEndCallback | null = null;
+let onBettingClosed: BettingClosedCallback | null = null;
 
 function freshCounts(): Record<ZoneId, number> {
   return Object.fromEntries(ALL_ZONES.map((z) => [z, 0])) as Record<ZoneId, number>;
@@ -54,10 +64,12 @@ function freshMultipliers(): Record<ZoneId, number> {
 
 export function setRoundCallbacks(
   onStart: RoundStartCallback,
-  onEnd: RoundEndCallback
+  onEnd: RoundEndCallback,
+  onBettingClose?: BettingClosedCallback
 ) {
   onRoundStart = onStart;
   onRoundEnd = onEnd;
+  onBettingClosed = onBettingClose ?? null;
 }
 
 export function getCurrentRoundState() {
@@ -65,6 +77,7 @@ export function getCurrentRoundState() {
     roundNumber: state.roundNumber,
     multipliers: { ...state.multipliers },
     endsAt: state.endsAt,
+    bettingEndsAt: state.bettingEndsAt,
   };
 }
 
@@ -148,6 +161,7 @@ export async function startRound(): Promise<void> {
   const roundNumber = await getNextRoundNumber();
   const now = Date.now();
   const endsAt = now + config.roundDurationMs;
+  const bettingEndsAt = now + config.bettingDurationMs;
 
   const supabase = getSupabase();
 
@@ -191,17 +205,20 @@ export async function startRound(): Promise<void> {
     volumes: freshCounts(),
     startedAt: now,
     endsAt,
+    bettingEndsAt,
     timer: setTimeout(() => endRound(), config.roundDurationMs),
+    bettingTimer: setTimeout(() => closeBetting(), config.bettingDurationMs),
   };
 
   console.log(
-    `[rounds] round #${roundNumber} started | multipliers: ${ALL_ZONES.map((z) => `${z.slice(0, 3)}=${multipliers[z]}x`).join(" ")}`
+    `[rounds] round #${roundNumber} started | betting: ${config.bettingDurationMs / 1000}s | round: ${config.roundDurationMs / 1000}s | multipliers: ${ALL_ZONES.map((z) => `${z.slice(0, 3)}=${multipliers[z]}x`).join(" ")}`
   );
 
   onRoundStart?.({
     roundNumber,
     multipliers,
     endsAt,
+    bettingEndsAt,
   });
 }
 
@@ -210,10 +227,23 @@ export function accumulateTx(zoneId: ZoneId, volume: number): void {
   state.volumes[zoneId] += volume;
 }
 
+function closeBetting(): void {
+  if (state.bettingTimer) {
+    clearTimeout(state.bettingTimer);
+    state.bettingTimer = null;
+  }
+  console.log(`[rounds] round #${state.roundNumber} betting closed`);
+  onBettingClosed?.({ roundNumber: state.roundNumber });
+}
+
 async function endRound(): Promise<void> {
   if (state.timer) {
     clearTimeout(state.timer);
     state.timer = null;
+  }
+  if (state.bettingTimer) {
+    clearTimeout(state.bettingTimer);
+    state.bettingTimer = null;
   }
 
   const scores: Record<ZoneId, ZoneScore> = {} as Record<ZoneId, ZoneScore>;
@@ -297,5 +327,9 @@ export function stopRounds(): void {
   if (state.timer) {
     clearTimeout(state.timer);
     state.timer = null;
+  }
+  if (state.bettingTimer) {
+    clearTimeout(state.bettingTimer);
+    state.bettingTimer = null;
   }
 }
