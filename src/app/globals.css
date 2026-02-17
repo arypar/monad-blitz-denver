@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-space);
+  --font-mono: var(--font-mono);
+  --color-bg-primary: #FAFAF8;
+  --color-bg-panel: #FFFFFF;
+  --color-bg-card: #FFFFFF;
+  --color-border: #E5E7EB;
+  --color-dough: #D4A574;
+  --color-crust: #8B6914;
+  --color-kuru: #E63946;
+  --color-apriori: #2D9B2D;
+  --color-nadfun: #D4A017;
+  --color-curvance: #7C3AED;
+  --color-monorail: #0891B2;
+  --color-apuff: #EA580C;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-space), system-ui, sans-serif;
+  background: var(--color-bg-primary);
+  color: #1a1a1a;
+}
+
+/* Clean card panel */
+.card-panel {
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+/* Pulsing animation (muted for light theme) */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.01); }
+}
+
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes float-up {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(-60px) scale(0.5); opacity: 0; }
+}
+
+@keyframes sizzle {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-2px) rotate(1deg); }
+  75% { transform: translateY(1px) rotate(-1deg); }
+}
+
+@keyframes ticker-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 0.3s ease-out;
+}
+
+.animate-float-up {
+  animation: float-up 1.5s ease-out forwards;
+}
+
+.animate-sizzle {
+  animation: sizzle 0.15s ease-in-out 3;
+}
+
+.animate-ticker-up {
+  animation: ticker-up 0.3s ease-out;
+}
+
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Number font */
+.font-numbers {
+  font-family: var(--font-mono), monospace;
+  font-variant-numeric: tabular-nums;
+}
