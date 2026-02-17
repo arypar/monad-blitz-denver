@@ -33,11 +33,17 @@ export default function BottomRow() {
         setBettingTimeLeft(0);
       } else {
         const diff = Math.max(0, bettingEndTime - now);
-        setBettingTimeLeft(Math.ceil(diff / 1000));
+        const secs = Math.ceil(diff / 1000);
+        setBettingTimeLeft(secs);
+
+        // Close betting client-side when timer hits zero
+        if (secs <= 0 && isBettingOpen) {
+          useGameStore.setState({ isBettingOpen: false });
+        }
       }
     }, 100);
     return () => clearInterval(interval);
-  }, [roundEndTime, bettingEndTime]);
+  }, [roundEndTime, bettingEndTime, isBettingOpen]);
 
   const poolDisplay =
     totalPool >= 1000

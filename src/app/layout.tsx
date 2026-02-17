@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Nunito, Inter } from "next/font/google";
 import Providers from "@/components/Providers";
+import PizzaBackground from "@/components/PizzaBackground";
 import "./globals.css";
 
 const nunito = Nunito({
@@ -32,6 +33,7 @@ export default function RootLayout({
         className={`${nunito.variable} ${inter.variable} antialiased`}
         style={{ background: "#f4f3ee" }}
       >
+        <PizzaBackground />
         <Providers>{children}</Providers>
       </body>
     </html>

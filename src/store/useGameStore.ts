@@ -2,10 +2,12 @@ import { create } from "zustand";
 import { ZoneId, ZoneActivity, Transaction, UserBet, HeatLevel } from "@/types";
 import { ZONE_IDS } from "@/lib/zones";
 
-function calcHeatLevel(recentTxCount: number): HeatLevel {
-  if (recentTxCount >= 12) return "onfire";
-  if (recentTxCount >= 7) return "hot";
-  if (recentTxCount >= 3) return "warm";
+/* Heat is driven by how fast a pizza climbs the leaderboard.
+   rankDelta = prevRank - currentRank  (positive = climbing up) */
+function calcHeatLevel(rankDelta: number): HeatLevel {
+  if (rankDelta >= 3) return "onfire";
+  if (rankDelta >= 2) return "hot";
+  if (rankDelta >= 1) return "warm";
   return "cold";
 }
 
@@ -14,6 +16,34 @@ function calcOdds(zoneVolume: number, totalPool: number): number {
   const share = zoneVolume / totalPool;
   const odds = Math.max(1.1, (1 / share) * 0.9);
   return Math.round(odds * 100) / 100;
+}
+
+/** Compute rank (1 = first) for every zone based on weightedScore */
+function computeRanks(zones: Record<ZoneId, ZoneActivity>): Record<ZoneId, number> {
+  const sorted = [...ZONE_IDS].sort((a, b) => {
+    const diff = zones[b].weightedScore - zones[a].weightedScore;
+    if (diff !== 0) return diff;
+    return a.localeCompare(b);
+  });
+  const ranks = {} as Record<ZoneId, number>;
+  sorted.forEach((id, idx) => { ranks[id] = idx + 1; });
+  return ranks;
+}
+
+/** Guarantee at least one pizza is always heated (the current leader). */
+function ensureOneHeated(zones: Record<ZoneId, ZoneActivity>, currentRanks: Record<ZoneId, number>): void {
+  if (ZONE_IDS.some((zid) => zones[zid].heatLevel !== "cold")) return;
+  // Nobody is heated — bump the rank-1 pizza to warm
+  const leader = ZONE_IDS.find((zid) => currentRanks[zid] === 1)!;
+  zones[leader] = { ...zones[leader], heatLevel: "warm" };
+}
+
+/** All zones start at the middle rank so early movers get warm/hot */
+function defaultPrevRanks(): Record<ZoneId, number> {
+  const r = {} as Record<ZoneId, number>;
+  const mid = Math.ceil(ZONE_IDS.length / 2);
+  ZONE_IDS.forEach((id) => { r[id] = mid; });
+  return r;
 }
 
 interface RoundResult {
@@ -44,6 +74,7 @@ const MAX_BLOCKS = 30;
 
 interface GameStore {
   zones: Record<ZoneId, ZoneActivity>;
+  prevRanks: Record<ZoneId, number>;
   multipliers: Record<ZoneId, number>;
   activityHistory: Record<ZoneId, ActivityPoint[]>;
   blockHistory: Record<ZoneId, BlockPoint[]>;
@@ -137,6 +168,7 @@ function createFreshBlockHistory(): Record<ZoneId, BlockPoint[]> {
 
 export const useGameStore = create<GameStore>((set, get) => ({
   zones: createFreshZones(),
+  prevRanks: defaultPrevRanks(),
   multipliers: defaultMultipliers(),
   activityHistory: createFreshHistory(),
   blockHistory: createFreshBlockHistory(),
@@ -172,7 +204,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       betCount: newBetCount,
       recentTxCount: zone.recentTxCount + 1,
       lastTxTimestamp: tx.timestamp,
-      heatLevel: calcHeatLevel(zone.recentTxCount + 1),
+      heatLevel: zone.heatLevel,
       multiplier,
       weightedScore: Math.round(newBetCount * multiplier * 100) / 100,
     };
@@ -184,6 +216,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
         odds: calcOdds(updatedZones[zid].totalVolume, newTotalPool),
       };
     });
+
+    // Heat = how fast this pizza is climbing the leaderboard
+    const currentRanks = computeRanks(updatedZones);
+    ZONE_IDS.forEach((zid) => {
+      const delta = state.prevRanks[zid] - currentRanks[zid];
+      updatedZones[zid] = {
+        ...updatedZones[zid],
+        heatLevel: calcHeatLevel(delta),
+      };
+    });
+    ensureOneHeated(updatedZones, currentRanks);
 
     const isBigBet = tx.amount >= 2;
     const newTransactions = [tx, ...state.transactions].slice(0, state.maxTransactions);
@@ -251,7 +294,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   placeBet: (zoneId: ZoneId, amount: number) => {
     const state = get();
-    if (state.isResolving) return;
+    if (state.isResolving || !state.isBettingOpen) return;
     const zone = state.zones[zoneId];
 
     const bet: UserBet = {
@@ -282,26 +325,50 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   decayRecentCounts: () => {
     const state = get();
+    const currentRanks = computeRanks(state.zones);
+    const newPrevRanks = { ...state.prevRanks };
     const updatedZones = { ...state.zones };
     let changed = false;
+
     ZONE_IDS.forEach((zid) => {
+      // Decay recentTxCount (kept for data tracking)
       if (updatedZones[zid].recentTxCount > 0) {
-        const decayed = Math.max(0, updatedZones[zid].recentTxCount - 1);
         updatedZones[zid] = {
           ...updatedZones[zid],
-          recentTxCount: decayed,
-          heatLevel: calcHeatLevel(decayed),
+          recentTxCount: Math.max(0, updatedZones[zid].recentTxCount - 1),
         };
         changed = true;
       }
+
+      // Decay prevRanks one step toward current rank (cools the heat)
+      const prev = newPrevRanks[zid];
+      const curr = currentRanks[zid];
+      if (prev > curr) {
+        newPrevRanks[zid] = prev - 1;
+        changed = true;
+      } else if (prev < curr) {
+        newPrevRanks[zid] = prev + 1;
+        changed = true;
+      }
+
+      // Recompute heat from updated delta
+      const delta = newPrevRanks[zid] - currentRanks[zid];
+      const newHeat = calcHeatLevel(delta);
+      if (updatedZones[zid].heatLevel !== newHeat) {
+        updatedZones[zid] = { ...updatedZones[zid], heatLevel: newHeat };
+        changed = true;
+      }
     });
-    if (changed) set({ zones: updatedZones });
+
+    ensureOneHeated(updatedZones, currentRanks);
+    if (changed) set({ zones: updatedZones, prevRanks: newPrevRanks });
   },
 
   handleRoundStart: (data) => {
     const { roundNumber, multipliers, endsAt, bettingEndsAt } = data;
     set({
       zones: createFreshZones(multipliers),
+      prevRanks: defaultPrevRanks(),
       multipliers,
       activityHistory: createFreshHistory(),
       blockHistory: createFreshBlockHistory(),
@@ -349,6 +416,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({
       zones: updatedZones,
       isResolving: true,
+      isBettingOpen: false,
       lastWinner: winner,
       roundResults: [result, ...state.roundResults].slice(0, 10),
       userBets: updatedBets,
