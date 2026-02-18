@@ -44,7 +44,7 @@ const monadTestnet = defineChain({
   nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
   rpcUrls: {
     default: {
-      http: ["https://testnet-rpc.monad.xyz"],
+      http: ["https://monad-blitz-denver-production.up.railway.app/api/rpc"],
     },
   },
   testnet: true,
@@ -69,8 +69,30 @@ interface TestAccount {
   address: string;
 }
 
+const MAX_RETRIES = 5;
+const BASE_DELAY_MS = 1000;
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      if (attempt === MAX_RETRIES) {
+        console.error(`     ✗ ${label} — failed after ${MAX_RETRIES} attempts`);
+        throw err;
+      }
+      const delay = BASE_DELAY_MS * 2 ** (attempt - 1);
+      console.warn(
+        `     ⚠ ${label} — attempt ${attempt} failed: ${err.shortMessage ?? err.message}. Retrying in ${delay}ms ...`
+      );
+      await sleep(delay);
+    }
+  }
+  throw new Error("unreachable");
 }
 
 // ─── Step 1: Generate or load accounts ───────────────────────────────────────
@@ -118,41 +140,60 @@ async function fundAccounts(accounts: TestAccount[]) {
     transport: http(),
   });
 
-  const funderBalance = await publicClient.getBalance({
-    address: funder.address,
-  });
+  const funderBalance = await withRetry("getBalance(funder)", () =>
+    publicClient.getBalance({ address: funder.address })
+  );
   console.log(`\n💰  Funder : ${funder.address}`);
   console.log(`    Balance: ${formatEther(funderBalance)} MON`);
 
-  const totalNeeded = parseEther(SEED_AMOUNT) * BigInt(NUM_ACCOUNTS);
+  // Check which accounts actually need funding (never been funded before)
+  const MIN_BALANCE = parseEther("0.01"); // treat anything > dust as "already funded"
+  const needsFunding: number[] = [];
+
+  for (let i = 0; i < accounts.length; i++) {
+    const addr = accounts[i].address as `0x${string}`;
+    const balance = await withRetry(`getBalance(${i + 1})`, () =>
+      publicClient.getBalance({ address: addr })
+    );
+    if (balance >= MIN_BALANCE) {
+      console.log(
+        `     [${i + 1}/${NUM_ACCOUNTS}] ${addr}  — already has ${formatEther(balance)} MON, skipping`
+      );
+    } else {
+      needsFunding.push(i);
+    }
+  }
+
+  if (needsFunding.length === 0) {
+    console.log("\n✅  All accounts already funded — nothing to do.");
+    return;
+  }
+
+  const totalNeeded = parseEther(SEED_AMOUNT) * BigInt(needsFunding.length);
   if (funderBalance < totalNeeded) {
     throw new Error(
-      `Insufficient balance. Need ${formatEther(totalNeeded)} MON, have ${formatEther(funderBalance)} MON`
+      `Insufficient balance. Need ${formatEther(totalNeeded)} MON for ${needsFunding.length} unfunded accounts, have ${formatEther(funderBalance)} MON`
     );
   }
 
   console.log(
-    `\n🏦  Funding ${NUM_ACCOUNTS} accounts with ${SEED_AMOUNT} MON each ...\n`
+    `\n🏦  Funding ${needsFunding.length} accounts with ${SEED_AMOUNT} MON each ...\n`
   );
 
-  for (let i = 0; i < accounts.length; i++) {
+  for (const i of needsFunding) {
     const addr = accounts[i].address as `0x${string}`;
 
-    const balance = await publicClient.getBalance({ address: addr });
-    if (balance >= parseEther(SEED_AMOUNT)) {
-      console.log(
-        `     [${i + 1}/${NUM_ACCOUNTS}] ${addr}  — already has ${formatEther(balance)} MON, skipping`
-      );
-      continue;
-    }
+    const hash = await withRetry(`fund(${i + 1})`, () =>
+      walletClient.sendTransaction({
+        chain: monadTestnet,
+        to: addr,
+        value: parseEther(SEED_AMOUNT),
+      })
+    );
 
-    const hash = await walletClient.sendTransaction({
-      chain: monadTestnet,
-      to: addr,
-      value: parseEther(SEED_AMOUNT),
-    });
-
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    const receipt = await withRetry(`receipt(fund ${i + 1})`, () =>
+      publicClient.waitForTransactionReceipt({ hash })
+    );
     console.log(
       `     [${i + 1}/${NUM_ACCOUNTS}] ${addr}  — funded (tx: ${receipt.transactionHash})`
     );
@@ -173,12 +214,14 @@ interface RoundResponse {
 }
 
 async function fetchRoundStatus(): Promise<RoundResponse> {
-  const url = `${BACKEND_URL}/api/round`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Backend ${res.status}: ${res.statusText}`);
-  }
-  return res.json() as Promise<RoundResponse>;
+  return withRetry("fetchRoundStatus", async () => {
+    const url = `${BACKEND_URL}/api/round`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Backend ${res.status}: ${res.statusText}`);
+    }
+    return res.json() as Promise<RoundResponse>;
+  });
 }
 
 async function waitForBetting(): Promise<RoundResponse> {
@@ -231,16 +274,20 @@ async function placeBets(accounts: TestAccount[]) {
 
     const zoneIndex = i % ZONE_NAMES.length;
 
-    const hash = await walletClient.writeContract({
-      chain: monadTestnet,
-      address: CONTRACT_ADDRESS,
-      abi: cheeznadAbi,
-      functionName: "deposit",
-      args: [zoneIndex],
-      value: parseEther(BET_AMOUNT),
-    });
+    const hash = await withRetry(`bet(${i + 1})`, () =>
+      walletClient.writeContract({
+        chain: monadTestnet,
+        address: CONTRACT_ADDRESS,
+        abi: cheeznadAbi,
+        functionName: "deposit",
+        args: [zoneIndex],
+        value: parseEther(BET_AMOUNT),
+      })
+    );
 
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    const receipt = await withRetry(`receipt(bet ${i + 1})`, () =>
+      publicClient.waitForTransactionReceipt({ hash })
+    );
     console.log(
       `     [${i + 1}/${accounts.length}] ${address}  → ${ZONE_NAMES[zoneIndex].padEnd(10)}  tx: ${receipt.transactionHash}`
     );

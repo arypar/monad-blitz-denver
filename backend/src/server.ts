@@ -15,6 +15,78 @@ import type {
 
 let wss: WebSocketServer | null = null;
 
+/* ── RPC rate limiter (token bucket, 40 req/s) ── */
+const RPC_MAX_RPS = 40;
+let rpcTokens = RPC_MAX_RPS;
+let rpcLastRefill = Date.now();
+const rpcQueue: Array<() => void> = [];
+
+function refillRpcTokens(): void {
+  const now = Date.now();
+  const elapsed = now - rpcLastRefill;
+  const added = Math.floor((elapsed * RPC_MAX_RPS) / 1000);
+  if (added > 0) {
+    rpcTokens = Math.min(RPC_MAX_RPS, rpcTokens + added);
+    rpcLastRefill = now;
+  }
+}
+
+function acquireRpcToken(): Promise<void> {
+  refillRpcTokens();
+  if (rpcTokens > 0) {
+    rpcTokens--;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => rpcQueue.push(resolve));
+}
+
+setInterval(() => {
+  refillRpcTokens();
+  while (rpcTokens > 0 && rpcQueue.length > 0) {
+    rpcTokens--;
+    rpcQueue.shift()!();
+  }
+}, 25);
+
+/* ── Keep-alive HTTP agent for upstream RPC ── */
+import { Agent } from "http";
+import { Agent as HttpsAgent } from "https";
+
+const rpcKeepAliveAgent = config.monadRpcHttp.startsWith("https")
+  ? new HttpsAgent({ keepAlive: true, maxSockets: 20, keepAliveMsecs: 30_000 })
+  : new Agent({ keepAlive: true, maxSockets: 20, keepAliveMsecs: 30_000 });
+
+async function forwardRpc(body: string): Promise<{ status: number; body: string }> {
+  await acquireRpcToken();
+  const url = new URL(config.monadRpcHttp);
+  const mod = url.protocol === "https:" ? await import("https") : await import("http");
+
+  return new Promise((resolve, reject) => {
+    const rpcReq = mod.request(
+      {
+        hostname: url.hostname,
+        port: url.port || (url.protocol === "https:" ? 443 : 80),
+        path: url.pathname,
+        method: "POST",
+        agent: rpcKeepAliveAgent,
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body),
+        },
+      },
+      (rpcRes) => {
+        const chunks: Buffer[] = [];
+        rpcRes.on("data", (c: Buffer) => chunks.push(c));
+        rpcRes.on("end", () =>
+          resolve({ status: rpcRes.statusCode ?? 502, body: Buffer.concat(chunks).toString() })
+        );
+      }
+    );
+    rpcReq.on("error", reject);
+    rpcReq.end(body);
+  });
+}
+
 function handleHttpRequest(req: IncomingMessage, res: ServerResponse): void {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -47,14 +119,9 @@ function handleHttpRequest(req: IncomingMessage, res: ServerResponse): void {
     req.on("end", async () => {
       try {
         const body = Buffer.concat(chunks).toString();
-        const rpcRes = await fetch(config.monadRpcHttp, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body,
-        });
-        const rpcBody = await rpcRes.text();
+        const rpcRes = await forwardRpc(body);
         res.writeHead(rpcRes.status, { "Content-Type": "application/json" });
-        res.end(rpcBody);
+        res.end(rpcRes.body);
       } catch (err) {
         console.error("[rpc-proxy] error:", err);
         res.writeHead(502, { "Content-Type": "application/json" });
