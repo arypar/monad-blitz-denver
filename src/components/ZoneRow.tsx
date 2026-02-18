@@ -5,6 +5,7 @@ import { Zone, ZoneActivity, ZoneId } from "@/types";
 import { useGameStore } from "@/store/useGameStore";
 import { ZONE_IDS } from "@/lib/zones";
 import { useContractPool } from "@/hooks/useContractPool";
+import ZoneTooltip from "./ZoneTooltip";
 
 interface ZoneRowProps {
   zone: Zone;
@@ -22,6 +23,9 @@ export default function ZoneRow({
   const zones = useGameStore((s) => s.zones);
   const { zonePercentages } = useContractPool();
   const [isHovered, setIsHovered] = useState(false);
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const sliceRef = useRef<HTMLImageElement>(null);
 
   const isHot = activity.heatLevel === "hot" || activity.heatLevel === "onfire";
 
@@ -29,26 +33,43 @@ export default function ZoneRow({
 
   const heatClass = `heat-${activity.heatLevel}`;
 
+  const handleSliceMouseEnter = (e: React.MouseEvent<HTMLImageElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setTooltipPosition({
+      x: rect.left + rect.width / 2,
+      y: rect.top
+    });
+    setShowTooltip(true);
+  };
+
+  const handleSliceMouseLeave = () => {
+    setShowTooltip(false);
+  };
+
   return (
-    <div
-      className={`zone-row ${heatClass}${isHot ? " is-hot" : ""}${rank === 1 ? " zone-row-leader" : ""}`}
-      onClick={() => onOpenModal(zone.id)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      <div className="slice-wrap">
-        {rank !== undefined && (
-          <div className={`zone-rank zone-rank-${Math.min(rank, 4)}`}>
-            {rank}
-          </div>
-        )}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          className="slice-img"
-          src={isHovered || isHot ? zone.sliceImageHot : zone.sliceImage}
-          alt={zone.displayName}
-        />
-      </div>
+    <>
+      <div
+        className={`zone-row ${heatClass}${isHot ? " is-hot" : ""}${rank === 1 ? " zone-row-leader" : ""}`}
+        onClick={() => onOpenModal(zone.id)}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <div className="slice-wrap">
+          {rank !== undefined && (
+            <div className={`zone-rank zone-rank-${Math.min(rank, 4)}`}>
+              {rank}
+            </div>
+          )}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            ref={sliceRef}
+            className="slice-img"
+            src={isHovered || isHot ? zone.sliceImageHot : zone.sliceImage}
+            alt={zone.displayName}
+            onMouseEnter={handleSliceMouseEnter}
+            onMouseLeave={handleSliceMouseLeave}
+          />
+        </div>
 
       <div className="zone-meta">
         <div className="zone-name">{zone.name}</div>
@@ -106,7 +127,14 @@ export default function ZoneRow({
           Buy In
         </button>
       </div>
-    </div>
+      </div>
+      
+      <ZoneTooltip 
+        zone={zone} 
+        isVisible={showTooltip} 
+        position={tooltipPosition} 
+      />
+    </>
   );
 }
 

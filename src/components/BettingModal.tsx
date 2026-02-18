@@ -5,6 +5,7 @@ import { useGameStore } from "@/store/useGameStore";
 import { ZONE_LIST, ZONES } from "@/lib/zones";
 import { ZONE_IDS } from "@/lib/zones";
 import type { ZoneId } from "@/types";
+import ZoneTooltip from "./ZoneTooltip";
 
 interface BettingModalProps {
   isOpen: boolean;
@@ -25,6 +26,9 @@ export default function BettingModal({
 
   const [selectedZones, setSelectedZones] = useState<Set<ZoneId>>(new Set());
   const [amount, setAmount] = useState("500");
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const [tooltipZone, setTooltipZone] = useState<any>(null);
 
   useEffect(() => {
     if (isOpen && preselectedZone) {
@@ -111,6 +115,21 @@ export default function BettingModal({
                   )
                 : 0;
 
+            const handleImageMouseEnter = (e: React.MouseEvent<HTMLImageElement>, zone: any) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              setTooltipPosition({
+                x: rect.left + rect.width / 2,
+                y: rect.top
+              });
+              setTooltipZone(zone);
+              setShowTooltip(true);
+            };
+
+            const handleImageMouseLeave = () => {
+              setShowTooltip(false);
+              setTooltipZone(null);
+            };
+
             return (
               <div
                 key={zone.id}
@@ -122,6 +141,8 @@ export default function BettingModal({
                   className="topping-img"
                   src={zone.sliceImage}
                   alt={zone.topping}
+                  onMouseEnter={(e) => handleImageMouseEnter(e, zone)}
+                  onMouseLeave={handleImageMouseLeave}
                 />
                 <div className="topping-info">
                   <div className="topping-name">{zone.topping}</div>
@@ -181,6 +202,14 @@ export default function BettingModal({
           Settled on-chain · No fees · Instant payout
         </div>
       </div>
+      
+      {tooltipZone && (
+        <ZoneTooltip 
+          zone={tooltipZone} 
+          isVisible={showTooltip} 
+          position={tooltipPosition} 
+        />
+      )}
     </div>
   );
 }
