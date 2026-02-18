@@ -23,8 +23,10 @@ const FUNDER_PRIVATE_KEY =
   "0xc3760082008a49570c2f4270dcf0fb0f648bf8606edc3116245109bbcd9ab58a" as Hex;
 
 const NUM_ACCOUNTS = 10;
-const SEED_AMOUNT = "0.5"; // MON sent to each test account
-const BET_AMOUNT = "0.1"; // MON bet per account
+const FUND_AMOUNT = "2";       // MON sent to each account (only when broke)
+const BET_AMOUNT = "0.01";     // MON bet per account per round
+const MIN_BALANCE_TO_BET = parseEther("0.02"); // refund threshold — need enough for bet + gas
+const POLL_INTERVAL_MS = 5000;
 
 const ZONE_NAMES = [
   "Pepperoni",
@@ -50,7 +52,7 @@ const monadTestnet = defineChain({
   testnet: true,
 });
 
-// ─── ABI (only the deposit function we need) ────────────────────────────────
+// ─── ABI ─────────────────────────────────────────────────────────────────────
 
 const cheeznadAbi = [
   {
@@ -95,7 +97,15 @@ async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
   throw new Error("unreachable");
 }
 
-// ─── Step 1: Generate or load accounts ───────────────────────────────────────
+function randomZone(): number {
+  return Math.floor(Math.random() * ZONE_NAMES.length);
+}
+
+function timestamp(): string {
+  return new Date().toLocaleTimeString();
+}
+
+// ─── Accounts ────────────────────────────────────────────────────────────────
 
 function getOrCreateAccounts(): TestAccount[] {
   if (fs.existsSync(ACCOUNTS_FILE)) {
@@ -124,30 +134,21 @@ function getOrCreateAccounts(): TestAccount[] {
   return accounts;
 }
 
-// ─── Step 2: Fund accounts from seed wallet ──────────────────────────────────
+// ─── Funding ─────────────────────────────────────────────────────────────────
 
-async function fundAccounts(accounts: TestAccount[]) {
+const publicClient = createPublicClient({
+  chain: monadTestnet,
+  transport: http(),
+});
+
+async function fundAccountsIfNeeded(accounts: TestAccount[]): Promise<void> {
   const funder = privateKeyToAccount(FUNDER_PRIVATE_KEY);
-
-  const publicClient = createPublicClient({
-    chain: monadTestnet,
-    transport: http(),
-  });
-
   const walletClient = createWalletClient({
     account: funder,
     chain: monadTestnet,
     transport: http(),
   });
 
-  const funderBalance = await withRetry("getBalance(funder)", () =>
-    publicClient.getBalance({ address: funder.address })
-  );
-  console.log(`\n💰  Funder : ${funder.address}`);
-  console.log(`    Balance: ${formatEther(funderBalance)} MON`);
-
-  // Check which accounts actually need funding (never been funded before)
-  const MIN_BALANCE = parseEther("0.01"); // treat anything > dust as "already funded"
   const needsFunding: number[] = [];
 
   for (let i = 0; i < accounts.length; i++) {
@@ -155,54 +156,59 @@ async function fundAccounts(accounts: TestAccount[]) {
     const balance = await withRetry(`getBalance(${i + 1})`, () =>
       publicClient.getBalance({ address: addr })
     );
-    if (balance >= MIN_BALANCE) {
+    if (balance < MIN_BALANCE_TO_BET) {
       console.log(
-        `     [${i + 1}/${NUM_ACCOUNTS}] ${addr}  — already has ${formatEther(balance)} MON, skipping`
+        `     [${i + 1}] ${addr}  — ${formatEther(balance)} MON (needs funding)`
       );
-    } else {
       needsFunding.push(i);
     }
   }
 
   if (needsFunding.length === 0) {
-    console.log("\n✅  All accounts already funded — nothing to do.");
     return;
   }
 
-  const totalNeeded = parseEther(SEED_AMOUNT) * BigInt(needsFunding.length);
+  const funderBalance = await withRetry("getBalance(funder)", () =>
+    publicClient.getBalance({ address: funder.address })
+  );
+  console.log(`\n💰  Funder balance: ${formatEther(funderBalance)} MON`);
+
+  const totalNeeded = parseEther(FUND_AMOUNT) * BigInt(needsFunding.length);
   if (funderBalance < totalNeeded) {
-    throw new Error(
-      `Insufficient balance. Need ${formatEther(totalNeeded)} MON for ${needsFunding.length} unfunded accounts, have ${formatEther(funderBalance)} MON`
+    console.warn(
+      `     ⚠ Funder only has ${formatEther(funderBalance)} MON, need ${formatEther(totalNeeded)} for ${needsFunding.length} accounts. Funding what we can.`
     );
   }
 
   console.log(
-    `\n🏦  Funding ${needsFunding.length} accounts with ${SEED_AMOUNT} MON each ...\n`
+    `\n🏦  Funding ${needsFunding.length} accounts with ${FUND_AMOUNT} MON each ...\n`
   );
 
   for (const i of needsFunding) {
     const addr = accounts[i].address as `0x${string}`;
-
-    const hash = await withRetry(`fund(${i + 1})`, () =>
-      walletClient.sendTransaction({
-        chain: monadTestnet,
-        to: addr,
-        value: parseEther(SEED_AMOUNT),
-      })
-    );
-
-    const receipt = await withRetry(`receipt(fund ${i + 1})`, () =>
-      publicClient.waitForTransactionReceipt({ hash })
-    );
-    console.log(
-      `     [${i + 1}/${NUM_ACCOUNTS}] ${addr}  — funded (tx: ${receipt.transactionHash})`
-    );
+    try {
+      const hash = await withRetry(`fund(${i + 1})`, () =>
+        walletClient.sendTransaction({
+          chain: monadTestnet,
+          to: addr,
+          value: parseEther(FUND_AMOUNT),
+        })
+      );
+      const receipt = await withRetry(`receipt(fund ${i + 1})`, () =>
+        publicClient.waitForTransactionReceipt({ hash })
+      );
+      console.log(
+        `     [${i + 1}] ${addr}  — funded ${FUND_AMOUNT} MON (tx: ${receipt.transactionHash.slice(0, 12)}...)`
+      );
+    } catch (err: any) {
+      console.error(`     ✗ Failed to fund account ${i + 1}: ${err.message}`);
+    }
   }
 
-  console.log("\n✅  All accounts funded!");
+  console.log("✅  Funding complete.\n");
 }
 
-// ─── Step 3: Poll backend until betting is open ──────────────────────────────
+// ─── Round polling ───────────────────────────────────────────────────────────
 
 interface RoundResponse {
   roundNumber: number;
@@ -215,8 +221,7 @@ interface RoundResponse {
 
 async function fetchRoundStatus(): Promise<RoundResponse> {
   return withRetry("fetchRoundStatus", async () => {
-    const url = `${BACKEND_URL}/api/round`;
-    const res = await fetch(url);
+    const res = await fetch(`${BACKEND_URL}/api/round`);
     if (!res.ok) {
       throw new Error(`Backend ${res.status}: ${res.statusText}`);
     }
@@ -224,98 +229,152 @@ async function fetchRoundStatus(): Promise<RoundResponse> {
   });
 }
 
-async function waitForBetting(): Promise<RoundResponse> {
-  console.log("\n⏳  Checking backend for betting status ...");
-
+async function waitForBettingOpen(): Promise<RoundResponse> {
   let round = await fetchRoundStatus();
-  console.log(
-    `     Round #${round.roundNumber}  |  Betting open: ${round.isBettingOpen}  |  Betting remaining: ${round.bettingTimeRemaining}s  |  Round remaining: ${round.roundTimeRemaining}s`
-  );
 
   if (round.isBettingOpen) {
-    console.log("✅  Betting is OPEN — proceeding to place bets.");
+    console.log(
+      `[${timestamp()}] ✅  Round #${round.roundNumber} — betting OPEN (${round.bettingTimeRemaining}s left)`
+    );
     return round;
   }
 
-  console.log("⏸️   Betting is closed. Polling every 5 s until it opens ...\n");
+  process.stdout.write(
+    `[${timestamp()}] ⏳  Round #${round.roundNumber} — waiting for betting to open (${round.roundTimeRemaining}s left) `
+  );
+
   while (!round.isBettingOpen) {
-    await sleep(5000);
+    await sleep(POLL_INTERVAL_MS);
     round = await fetchRoundStatus();
-    console.log(
-      `     Round #${round.roundNumber}  |  Betting open: ${round.isBettingOpen}  |  Round remaining: ${round.roundTimeRemaining}s`
-    );
+    process.stdout.write(".");
   }
 
-  console.log("\n✅  Betting is now OPEN!");
+  console.log(
+    `\n[${timestamp()}] ✅  Round #${round.roundNumber} — betting OPEN!`
+  );
   return round;
 }
 
-// ─── Step 4: Place bets ──────────────────────────────────────────────────────
+// ─── Place bets ──────────────────────────────────────────────────────────────
 
-async function placeBets(accounts: TestAccount[]) {
-  const publicClient = createPublicClient({
-    chain: monadTestnet,
-    transport: http(),
-  });
-
+async function placeBets(accounts: TestAccount[]): Promise<void> {
   console.log(
     `\n🎰  Placing ${BET_AMOUNT} MON bets from ${accounts.length} accounts ...\n`
   );
 
+  let successCount = 0;
+
   for (let i = 0; i < accounts.length; i++) {
     const { privateKey, address } = accounts[i];
-    const account = privateKeyToAccount(privateKey);
 
+    const balance = await withRetry(`getBalance(${i + 1})`, () =>
+      publicClient.getBalance({ address: address as `0x${string}` })
+    );
+    if (balance < MIN_BALANCE_TO_BET) {
+      console.log(
+        `     [${i + 1}] ${address}  — skipped, only ${formatEther(balance)} MON`
+      );
+      continue;
+    }
+
+    const account = privateKeyToAccount(privateKey);
     const walletClient = createWalletClient({
       account,
       chain: monadTestnet,
       transport: http(),
     });
 
-    const zoneIndex = i % ZONE_NAMES.length;
+    const zone = randomZone();
 
-    const hash = await withRetry(`bet(${i + 1})`, () =>
-      walletClient.writeContract({
-        chain: monadTestnet,
-        address: CONTRACT_ADDRESS,
-        abi: cheeznadAbi,
-        functionName: "deposit",
-        args: [zoneIndex],
-        value: parseEther(BET_AMOUNT),
-      })
-    );
+    try {
+      const hash = await withRetry(`bet(${i + 1})`, () =>
+        walletClient.writeContract({
+          chain: monadTestnet,
+          address: CONTRACT_ADDRESS,
+          abi: cheeznadAbi,
+          functionName: "deposit",
+          args: [zone],
+          value: parseEther(BET_AMOUNT),
+        })
+      );
 
-    const receipt = await withRetry(`receipt(bet ${i + 1})`, () =>
-      publicClient.waitForTransactionReceipt({ hash })
-    );
-    console.log(
-      `     [${i + 1}/${accounts.length}] ${address}  → ${ZONE_NAMES[zoneIndex].padEnd(10)}  tx: ${receipt.transactionHash}`
-    );
+      const receipt = await withRetry(`receipt(bet ${i + 1})`, () =>
+        publicClient.waitForTransactionReceipt({ hash })
+      );
+      console.log(
+        `     [${i + 1}] ${address}  → ${ZONE_NAMES[zone].padEnd(10)}  tx: ${receipt.transactionHash.slice(0, 12)}...`
+      );
+      successCount++;
+    } catch (err: any) {
+      console.error(
+        `     [${i + 1}] ${address}  — bet failed: ${err.shortMessage ?? err.message}`
+      );
+    }
   }
 
-  console.log("\n✅  All bets placed!");
+  console.log(`\n✅  ${successCount}/${accounts.length} bets placed.`);
 }
 
-// ─── Main ────────────────────────────────────────────────────────────────────
+// ─── Main loop ───────────────────────────────────────────────────────────────
+
+let roundCounter = 0;
 
 async function main() {
-  console.log("╔══════════════════════════════════════════════╗");
-  console.log("║   Cheeznad  ·  Multi-Account Betting Test   ║");
-  console.log("╚══════════════════════════════════════════════╝\n");
+  console.log("╔══════════════════════════════════════════════════╗");
+  console.log("║   Cheeznad  ·  Continuous Betting Bot            ║");
+  console.log("║   Bet: 0.01 MON  ·  Random zones  ·  10 accts   ║");
+  console.log("╚══════════════════════════════════════════════════╝\n");
 
-  // 1. Generate (or reload) 10 test wallets
   const accounts = getOrCreateAccounts();
 
-  // 2. Fund them from the seed wallet
-  await fundAccounts(accounts);
+  // Initial funding — give everyone 2 MON
+  console.log("\n🏦  Checking balances & funding accounts that need it ...");
+  await fundAccountsIfNeeded(accounts);
 
-  // 3. Wait until the backend says betting is open
-  await waitForBetting();
+  console.log("\n🔄  Entering main loop — Ctrl+C to stop\n");
+  console.log("─".repeat(60));
 
-  // 4. Fire bets
-  await placeBets(accounts);
+  let lastRoundNumber = -1;
 
-  console.log("\n🏁  Test complete.\n");
+  while (true) {
+    try {
+      const round = await waitForBettingOpen();
+
+      if (round.roundNumber === lastRoundNumber) {
+        // Already bet on this round, wait for it to end
+        console.log(
+          `[${timestamp()}]    Already bet on round #${round.roundNumber}, waiting ...`
+        );
+        await sleep(POLL_INTERVAL_MS);
+        continue;
+      }
+
+      lastRoundNumber = round.roundNumber;
+      roundCounter++;
+
+      console.log(`\n${"─".repeat(60)}`);
+      console.log(
+        `[${timestamp()}] 🎲  ROUND #${round.roundNumber}  (session bet #${roundCounter})`
+      );
+      console.log("─".repeat(60));
+
+      // Check if any accounts need refunding before betting
+      await fundAccountsIfNeeded(accounts);
+
+      await placeBets(accounts);
+
+      console.log("─".repeat(60));
+
+      // Wait a bit before polling for next round
+      await sleep(POLL_INTERVAL_MS);
+    } catch (err: any) {
+      console.error(
+        `\n[${timestamp()}] ❌  Error in main loop: ${err.message}`
+      );
+      console.log("     Retrying in 10s ...\n");
+      await sleep(10_000);
+    }
+  }
 }
 
 main().catch((err) => {

@@ -1022,10 +1022,10 @@ function PizzaPickerScene({
       />
 
       {/* Title section */}
-      <motion.div className="z-10 text-center mb-2">
+      <motion.div className="z-10 text-center mb-1">
         <motion.p
-          className="text-[10px] font-bold tracking-[0.35em] uppercase mb-3"
-          style={{ color: "rgba(0,0,0,0.2)" }}
+          className="text-[10px] font-bold tracking-[0.35em] uppercase mb-2"
+          style={{ color: "rgba(0,0,0,0.18)" }}
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
@@ -1033,7 +1033,7 @@ function PizzaPickerScene({
           Choose your zone
         </motion.p>
         <motion.h2
-          className="text-4xl sm:text-6xl font-black leading-none"
+          className="text-4xl sm:text-5xl font-black leading-none"
           style={{
             fontFamily: "var(--font-nunito), system-ui",
             color: "#111",
@@ -1052,8 +1052,8 @@ function PizzaPickerScene({
       </motion.div>
 
       <motion.p
-        className="text-sm z-10 mb-8 sm:mb-10"
-        style={{ color: "rgba(0,0,0,0.4)" }}
+        className="text-[13px] z-10 mb-6"
+        style={{ color: "rgba(0,0,0,0.35)" }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.25 }}
@@ -1062,17 +1062,16 @@ function PizzaPickerScene({
       </motion.p>
 
       {/* Zone cards — single row, evenly spaced */}
-      <div className="grid z-10 w-full px-4 sm:px-6" style={{ gridTemplateColumns: "repeat(5, 1fr)", gap: "12px", maxWidth: 900 }}>
+      <div className="grid z-10 w-full px-4 sm:px-6" style={{ gridTemplateColumns: "repeat(5, 1fr)", gap: "14px", maxWidth: 860 }}>
         {ZONE_LIST.map((zone, i) => {
           const sel = picked === zone.id;
           const dim = picked !== null && !sel;
           const hov = hovered === zone.id && !picked;
-          const protocols = ZONE_PROTOCOLS[zone.id] || [];
 
           return (
             <motion.button
               key={zone.id}
-              className="relative flex flex-col items-center rounded-3xl px-3 py-4 sm:py-5 cursor-pointer overflow-hidden"
+              className="relative flex flex-col items-center rounded-2xl px-3 py-4 cursor-pointer overflow-hidden"
               style={{
                 background: sel
                   ? `linear-gradient(145deg, rgba(${zone.colorRgb}, 0.1), rgba(${zone.colorRgb}, 0.03))`
@@ -1134,7 +1133,7 @@ function PizzaPickerScene({
             >
               {/* Inner color glow on hover */}
               <motion.div
-                className="absolute inset-0 rounded-3xl pointer-events-none"
+                className="absolute inset-0 rounded-2xl pointer-events-none"
                 animate={{
                   background:
                     hov || sel
@@ -1189,7 +1188,7 @@ function PizzaPickerScene({
 
               {/* Zone name */}
               <motion.p
-                className="text-[14px] font-black mt-2 z-10 tracking-tight"
+                className="text-[13px] font-black mt-2 z-10 tracking-tight"
                 style={{
                   color: zone.color,
                   fontFamily: "var(--font-nunito), system-ui",
@@ -1210,27 +1209,6 @@ function PizzaPickerScene({
               >
                 {zone.name}
               </p>
-
-              {/* Protocol tags */}
-              <div className="flex flex-wrap gap-1 mt-2.5 justify-center z-10">
-                {protocols.map((proto) => (
-                  <span
-                    key={proto}
-                    className="text-[9px] font-bold px-2 py-0.5 rounded-full"
-                    style={{
-                      background:
-                        hov || sel
-                          ? `rgba(${zone.colorRgb}, 0.1)`
-                          : "rgba(0,0,0,0.04)",
-                      color:
-                        hov || sel ? zone.color : "rgba(0,0,0,0.3)",
-                      transition: "all 0.3s",
-                    }}
-                  >
-                    {proto}
-                  </span>
-                ))}
-              </div>
 
               {/* Selected checkmark badge */}
               {sel && (
@@ -1253,7 +1231,7 @@ function PizzaPickerScene({
               {/* Selected pulse ring */}
               {sel && (
                 <motion.div
-                  className="absolute inset-0 rounded-3xl pointer-events-none z-0"
+                  className="absolute inset-0 rounded-2xl pointer-events-none z-0"
                   style={{ border: `2px solid ${zone.color}` }}
                   initial={{ opacity: 0.8, scale: 1 }}
                   animate={{ opacity: 0, scale: 1.18 }}
@@ -1298,7 +1276,7 @@ function PizzaPickerScene({
       </AnimatePresence>
 
       {/* Bottom hint */}
-      <div className="z-10 mt-8 sm:mt-10">
+      <div className="z-10 mt-6">
         <AnimatePresence mode="wait">
           {picked ? (
             <motion.div
@@ -1793,6 +1771,7 @@ function LaunchCtaScene({ chosenZone, engine }: { chosenZone: Zone; engine: Synt
       {...pageTransition}
       className="flex flex-col items-center justify-center h-full relative overflow-hidden"
     >
+      <PizzaRain count={35} />
       <FloatingPizzas count={6} seed={999} />
 
       {/* Strong zone-colored background glow */}
