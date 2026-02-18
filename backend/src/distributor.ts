@@ -8,7 +8,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { config } from "./config.js";
 import type { ZoneId } from "./types.js";
 
-const CHEEZNAD_ADDRESS = "0x0606a92d01845B04A1C4F5cf788247FB4A14fd58" as const;
+const CHEEZNAD_ADDRESS = "0xa02d5EE3B5462be694e7F6Fe9c101434399aD970" as const;
 
 const POLL_INTERVAL_MS = 20_000;
 
@@ -72,6 +72,20 @@ const cheeznadAbi = [
     type: "function",
     stateMutability: "view",
     inputs: [{ name: "_zone", type: "uint8" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "getRoundTimeRemaining",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "getBettingTimeRemaining",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
     outputs: [{ name: "", type: "uint256" }],
   },
 ] as const;
@@ -204,4 +218,29 @@ export async function distributeWinnings(winner: ZoneId): Promise<void> {
       }
     }, POLL_INTERVAL_MS);
   });
+}
+
+export async function readContractTimers(): Promise<{
+  roundRemaining: number;
+  bettingRemaining: number;
+}> {
+  const { publicClient } = getClients();
+
+  const [roundRaw, bettingRaw] = await Promise.all([
+    publicClient.readContract({
+      address: CHEEZNAD_ADDRESS,
+      abi: cheeznadAbi,
+      functionName: "getRoundTimeRemaining",
+    }),
+    publicClient.readContract({
+      address: CHEEZNAD_ADDRESS,
+      abi: cheeznadAbi,
+      functionName: "getBettingTimeRemaining",
+    }),
+  ]);
+
+  return {
+    roundRemaining: Number(roundRaw as bigint),
+    bettingRemaining: Number(bettingRaw as bigint),
+  };
 }

@@ -1,6 +1,6 @@
 import { config } from "./config.js";
 import { getSupabase } from "./supabase.js";
-import { distributeWinnings } from "./distributor.js";
+import { distributeWinnings, readContractTimers } from "./distributor.js";
 import type { ZoneId, ZoneScore } from "./types.js";
 
 const ALL_ZONES: ZoneId[] = ["pepperoni", "mushroom", "pineapple", "olive", "anchovy"];
@@ -161,8 +161,23 @@ export async function startRound(): Promise<void> {
   const multipliers = await calculateMultipliers();
   const roundNumber = await getNextRoundNumber();
   const now = Date.now();
-  const endsAt = now + config.roundDurationMs;
-  const bettingEndsAt = now + config.bettingDurationMs;
+
+  // Read timers from the contract (source of truth)
+  let roundDurationMs = config.roundDurationMs;
+  let bettingDurationMs = config.bettingDurationMs;
+  try {
+    const timers = await readContractTimers();
+    roundDurationMs = timers.roundRemaining * 1000;
+    bettingDurationMs = timers.bettingRemaining * 1000;
+    console.log(
+      `[rounds] synced with contract — round: ${timers.roundRemaining}s, betting: ${timers.bettingRemaining}s`
+    );
+  } catch (err) {
+    console.error("[rounds] failed to read contract timers, using config defaults:", err);
+  }
+
+  const endsAt = now + roundDurationMs;
+  const bettingEndsAt = now + bettingDurationMs;
 
   const supabase = getSupabase();
 
@@ -207,12 +222,14 @@ export async function startRound(): Promise<void> {
     startedAt: now,
     endsAt,
     bettingEndsAt,
-    timer: setTimeout(() => endRound(), config.roundDurationMs),
-    bettingTimer: setTimeout(() => closeBetting(), config.bettingDurationMs),
+    timer: setTimeout(() => endRound(), roundDurationMs),
+    bettingTimer: bettingDurationMs > 0
+      ? setTimeout(() => closeBetting(), bettingDurationMs)
+      : null,
   };
 
   console.log(
-    `[rounds] round #${roundNumber} started | betting: ${config.bettingDurationMs / 1000}s | round: ${config.roundDurationMs / 1000}s | multipliers: ${ALL_ZONES.map((z) => `${z.slice(0, 3)}=${multipliers[z]}x`).join(" ")}`
+    `[rounds] round #${roundNumber} started | betting: ${Math.round(bettingDurationMs / 1000)}s | round: ${Math.round(roundDurationMs / 1000)}s | multipliers: ${ALL_ZONES.map((z) => `${z.slice(0, 3)}=${multipliers[z]}x`).join(" ")}`
   );
 
   onRoundStart?.({
@@ -301,11 +318,12 @@ async function endRound(): Promise<void> {
     scores,
   });
 
-  distributeWinnings(winner).catch((err) =>
-    console.error("[distributor] failed:", err)
-  );
-
-  setTimeout(() => startRound(), 4000);
+  distributeWinnings(winner)
+    .then(() => startRound())
+    .catch((err) => {
+      console.error("[distributor] failed:", err);
+      startRound();
+    });
 }
 
 export async function getPastWinners(limit = 10): Promise<

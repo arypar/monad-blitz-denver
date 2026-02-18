@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import { useContractPool } from "@/hooks/useContractPool";
+import { useContractRound } from "@/hooks/useContractRound";
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -12,39 +12,8 @@ function formatTime(seconds: number): string {
 
 export default function BottomRow() {
   const { totalPool } = useContractPool();
-  const roundEndTime = useGameStore((s) => s.roundEndTime);
-  const bettingEndTime = useGameStore((s) => s.bettingEndTime);
-  const isBettingOpen = useGameStore((s) => s.isBettingOpen);
+  const { roundTimeLeft, bettingTimeLeft, isBettingOpen } = useContractRound();
   const roundId = useGameStore((s) => s.roundId);
-  const [roundTimeLeft, setRoundTimeLeft] = useState(120);
-  const [bettingTimeLeft, setBettingTimeLeft] = useState(60);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Date.now();
-
-      if (roundEndTime <= 0) {
-        setRoundTimeLeft(0);
-      } else {
-        const diff = Math.max(0, roundEndTime - now);
-        setRoundTimeLeft(Math.ceil(diff / 1000));
-      }
-
-      if (bettingEndTime <= 0) {
-        setBettingTimeLeft(0);
-      } else {
-        const diff = Math.max(0, bettingEndTime - now);
-        const secs = Math.ceil(diff / 1000);
-        setBettingTimeLeft(secs);
-
-        // Close betting client-side when timer hits zero
-        if (secs <= 0 && isBettingOpen) {
-          useGameStore.setState({ isBettingOpen: false });
-        }
-      }
-    }, 100);
-    return () => clearInterval(interval);
-  }, [roundEndTime, bettingEndTime, isBettingOpen]);
 
   const poolDisplay =
     totalPool >= 1000

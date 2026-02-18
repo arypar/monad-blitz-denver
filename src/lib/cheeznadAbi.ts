@@ -1,7 +1,7 @@
 import type { ZoneId } from "@/types";
 
 export const CHEEZNAD_ADDRESS =
-  "0x0606a92d01845B04A1C4F5cf788247FB4A14fd58" as const;
+  "0xa02d5EE3B5462be694e7F6Fe9c101434399aD970" as const;
 
 export const ZONE_TO_ENUM: Record<ZoneId, number> = {
   pepperoni: 0,
@@ -25,5 +25,33 @@ export const cheeznadAbi = [
     stateMutability: "payable",
     inputs: [{ name: "_zone", type: "uint8" }],
     outputs: [],
+  },
+  {
+    name: "getRoundTimeRemaining",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "getBettingTimeRemaining",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "getCurrentRoundPhase",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    name: "isBettingOpen",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bool" }],
   },
 ] as const;
