@@ -12,6 +12,7 @@ import type { SynthEngine } from "@/lib/synthBeats";
 
 // ─── Scene definitions ──────────────────────────────────────────────────────────
 type Scene =
+  | "urlReveal"
   | "titleDrop"
   | "theHook"
   | "zonesReveal"
@@ -21,6 +22,7 @@ type Scene =
   | "launchCta";
 
 const SCENES: Scene[] = [
+  "urlReveal",
   "titleDrop",
   "theHook",
   "zonesReveal",
@@ -31,6 +33,7 @@ const SCENES: Scene[] = [
 ];
 
 const SCENE_DURATIONS: Record<Scene, number | null> = {
+  urlReveal: null,
   titleDrop: 4000,
   theHook: 8500,
   zonesReveal: 13000,
@@ -256,6 +259,34 @@ function NavHint({ canGoBack, canGoForward }: { canGoBack: boolean; canGoForward
       >
         use arrow keys
       </span>
+    </motion.div>
+  );
+}
+
+// ─── Scene 0: URL Reveal ─────────────────────────────────────────────────────────
+function UrlRevealScene({ engine }: { engine: SynthEngine }) {
+  useEffect(() => {
+    engine.whoosh();
+  }, [engine]);
+
+  return (
+    <motion.div
+      className="absolute inset-0 flex items-center justify-center"
+      style={{ background: "#f4f3ee" }}
+      {...pageTransition}
+    >
+      <motion.p
+        className="text-lg sm:text-2xl tracking-wide z-20 text-center font-bold select-all cursor-text"
+        style={{
+          fontFamily: "var(--font-nunito), system-ui",
+          color: "#111",
+        }}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+      >
+        https://tinyurl.com/cheeznad
+      </motion.p>
     </motion.div>
   );
 }
@@ -2017,6 +2048,7 @@ export default function StartPage() {
       {/* Screen content */}
       <div className="flex-1 relative">
         <AnimatePresence mode="wait">
+          {scene === "urlReveal" && <UrlRevealScene key="urlReveal" engine={engine} />}
           {scene === "titleDrop" && <TitleDropScene key="titleDrop" engine={engine} />}
           {scene === "theHook" && <TheHookScene key="theHook" engine={engine} />}
           {scene === "zonesReveal" && <ZonesRevealScene key="zonesReveal" engine={engine} />}
