@@ -1,6 +1,6 @@
 import { config } from "./config.js";
 import { getSupabase } from "./supabase.js";
-import { distributeWinnings, readContractTimers } from "./distributor.js";
+import { distributeWinnings } from "./distributor.js";
 import type { ZoneId, ZoneScore } from "./types.js";
 
 const ALL_ZONES: ZoneId[] = ["pepperoni", "mushroom", "pineapple", "olive", "anchovy"];
@@ -80,6 +80,18 @@ export function getCurrentRoundState() {
     endsAt: state.endsAt,
     bettingEndsAt: state.bettingEndsAt,
   };
+}
+
+export function isBettingCurrentlyOpen(): boolean {
+  return Date.now() < state.bettingEndsAt;
+}
+
+export function getRoundTimeRemaining(): number {
+  return Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000));
+}
+
+export function getBettingTimeRemaining(): number {
+  return Math.max(0, Math.ceil((state.bettingEndsAt - Date.now()) / 1000));
 }
 
 async function calculateMultipliers(): Promise<Record<ZoneId, number>> {
@@ -162,19 +174,8 @@ export async function startRound(): Promise<void> {
   const roundNumber = await getNextRoundNumber();
   const now = Date.now();
 
-  // Read timers from the contract (source of truth)
-  let roundDurationMs = config.roundDurationMs;
-  let bettingDurationMs = config.bettingDurationMs;
-  try {
-    const timers = await readContractTimers();
-    roundDurationMs = timers.roundRemaining * 1000;
-    bettingDurationMs = timers.bettingRemaining * 1000;
-    console.log(
-      `[rounds] synced with contract — round: ${timers.roundRemaining}s, betting: ${timers.bettingRemaining}s`
-    );
-  } catch (err) {
-    console.error("[rounds] failed to read contract timers, using config defaults:", err);
-  }
+  const roundDurationMs = config.roundDurationMs;
+  const bettingDurationMs = config.bettingDurationMs;
 
   const endsAt = now + roundDurationMs;
   const bettingEndsAt = now + bettingDurationMs;

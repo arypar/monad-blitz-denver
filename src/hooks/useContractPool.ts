@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { createContext, useContext, useMemo } from "react";
 import { useReadContracts } from "wagmi";
 import { formatEther } from "viem";
 import { CHEEZNAD_ADDRESS, cheeznadAbi } from "@/lib/cheeznadAbi";
@@ -9,7 +9,30 @@ import type { ZoneId } from "@/types";
 
 const ZONE_ENUM = [0, 1, 2, 3, 4] as const;
 
-export function useContractPool() {
+export interface ContractPoolData {
+  totalPool: number;
+  zoneTotals: Record<ZoneId, number>;
+  zonePercentages: Record<ZoneId, number>;
+  isLoading: boolean;
+  error: Error | null;
+}
+
+const defaultPool: ContractPoolData = {
+  totalPool: 0,
+  zoneTotals: {} as Record<ZoneId, number>,
+  zonePercentages: {} as Record<ZoneId, number>,
+  isLoading: true,
+  error: null,
+};
+
+export const ContractPoolContext =
+  createContext<ContractPoolData>(defaultPool);
+
+/**
+ * Internal hook — call this ONCE in ContractPoolProvider.
+ * All other components should use useContractPool() which reads from context.
+ */
+export function useContractPoolFetch(): ContractPoolData {
   const { data, isLoading, error } = useReadContracts({
     contracts: ZONE_ENUM.map((i) => ({
       address: CHEEZNAD_ADDRESS,
@@ -17,7 +40,7 @@ export function useContractPool() {
       functionName: "getZoneTotal" as const,
       args: [i] as const,
     })),
-    query: { refetchInterval: 5000 },
+    query: { refetchInterval: 15_000 },
   });
 
   return useMemo(() => {
@@ -43,6 +66,11 @@ export function useContractPool() {
           : 0;
     });
 
-    return { totalPool, zoneTotals, zonePercentages, isLoading, error };
+    return { totalPool, zoneTotals, zonePercentages, isLoading, error: error ?? null };
   }, [data, isLoading, error]);
+}
+
+/** Read pool data from the shared context (no RPC calls). */
+export function useContractPool(): ContractPoolData {
+  return useContext(ContractPoolContext);
 }

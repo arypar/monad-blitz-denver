@@ -16,8 +16,11 @@ interface SimpleBetModalProps {
 
 export default function SimpleBetModal({ isOpen, onClose, zoneId }: SimpleBetModalProps) {
   const isResolving = useGameStore((s) => s.isResolving);
+  const isBettingOpen = useGameStore((s) => s.isBettingOpen);
   const zoneActivity = useGameStore((s) => zoneId ? s.zones[zoneId] : null);
   const [amount, setAmount] = useState("0.5");
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
 
   const { isConnected } = useAccount();
 
@@ -49,11 +52,38 @@ export default function SimpleBetModal({ isOpen, onClose, zoneId }: SimpleBetMod
   useEffect(() => {
     if (!isOpen) {
       resetTx();
+      setValidationError(null);
     }
   }, [isOpen, resetTx]);
 
-  const handlePlaceBet = useCallback(() => {
+  const handlePlaceBet = useCallback(async () => {
     if (isResolving || amtNum <= 0 || !zoneId || !isConnected) return;
+
+    if (!isBettingOpen) {
+      setValidationError("Betting window is closed");
+      return;
+    }
+
+    setValidationError(null);
+    setIsValidating(true);
+
+    try {
+      const res = await fetch("/api/round");
+      const data = await res.json();
+
+      if (!data.isBettingOpen) {
+        setValidationError("Betting window is closed");
+        setIsValidating(false);
+        return;
+      }
+    } catch {
+      setValidationError("Could not verify betting status — try again");
+      setIsValidating(false);
+      return;
+    }
+
+    setIsValidating(false);
+
     writeContract({
       address: CHEEZNAD_ADDRESS,
       abi: cheeznadAbi,
@@ -61,7 +91,7 @@ export default function SimpleBetModal({ isOpen, onClose, zoneId }: SimpleBetMod
       args: [ZONE_TO_ENUM[zoneId]],
       value: parseEther(amount),
     });
-  }, [isResolving, amtNum, zoneId, isConnected, writeContract, amount]);
+  }, [isResolving, amtNum, zoneId, isConnected, isBettingOpen, writeContract, amount]);
 
   const handleOverlayClick = useCallback(
     (e: React.MouseEvent) => {
@@ -120,10 +150,14 @@ export default function SimpleBetModal({ isOpen, onClose, zoneId }: SimpleBetMod
           <button
             className="modal-buy"
             onClick={handlePlaceBet}
-            disabled={isResolving || amtNum <= 0 || !isConnected || isSending || isConfirming}
+            disabled={isResolving || !isBettingOpen || amtNum <= 0 || !isConnected || isSending || isConfirming || isValidating}
           >
             {!isConnected
               ? "Connect Wallet"
+              : !isBettingOpen
+              ? "Betting Closed"
+              : isValidating
+              ? "Checking..."
               : isSending
               ? "Confirm in Wallet..."
               : isConfirming
@@ -134,12 +168,12 @@ export default function SimpleBetModal({ isOpen, onClose, zoneId }: SimpleBetMod
           </button>
         </div>
 
-        {writeError && (
+        {(writeError || validationError) && (
           <div className="modal-error" style={{ color: "#ef4444", fontSize: "0.8rem", textAlign: "center", marginTop: "0.5rem" }}>
-            {writeError.message.includes("User rejected")
+            {validationError
+              ? validationError
+              : writeError?.message.includes("User rejected")
               ? "Transaction rejected"
-              : writeError.message.includes("Betting window")
-              ? "Betting window is closed"
               : "Transaction failed"}
           </div>
         )}

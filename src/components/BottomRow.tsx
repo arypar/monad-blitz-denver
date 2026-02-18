@@ -2,7 +2,7 @@
 
 import { useGameStore } from "@/store/useGameStore";
 import { useContractPool } from "@/hooks/useContractPool";
-import { useContractRound } from "@/hooks/useContractRound";
+import { useRoundTimer } from "@/hooks/useRoundTimer";
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -12,7 +12,7 @@ function formatTime(seconds: number): string {
 
 export default function BottomRow() {
   const { totalPool } = useContractPool();
-  const { roundTimeLeft, bettingTimeLeft, isBettingOpen } = useContractRound();
+  const { roundTimeLeft, bettingTimeLeft, isBettingOpen } = useRoundTimer();
   const roundId = useGameStore((s) => s.roundId);
 
   const poolDisplay =

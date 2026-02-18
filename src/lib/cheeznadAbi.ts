@@ -1,7 +1,7 @@
 import type { ZoneId } from "@/types";
 
 export const CHEEZNAD_ADDRESS =
-  "0xa02d5EE3B5462be694e7F6Fe9c101434399aD970" as const;
+  "0x570afd8CE31C90728B0e8926C6922dBc8DefFF70" as const;
 
 export const ZONE_TO_ENUM: Record<ZoneId, number> = {
   pepperoni: 0,

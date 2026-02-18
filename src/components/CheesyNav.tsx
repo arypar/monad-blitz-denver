@@ -1,46 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useGameStore } from "@/store/useGameStore";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useBalance, useAccount } from "wagmi";
 import { formatEther } from "viem";
 
 export default function CheesyNav() {
-  const transactions = useGameStore((s) => s.transactions);
-  const [tps, setTps] = useState(0);
-  const txTimestamps = useRef<number[]>([]);
-
   const { address, isConnected } = useAccount();
   const { data: balanceData } = useBalance({
     address,
   });
-
-  useEffect(() => {
-    if (transactions.length === 0) return;
-    const latest = transactions[0];
-    if (!latest) return;
-
-    txTimestamps.current.push(Date.now());
-
-    const fiveSecondsAgo = Date.now() - 5000;
-    txTimestamps.current = txTimestamps.current.filter((t) => t > fiveSecondsAgo);
-
-    const count = txTimestamps.current.length;
-    const estimatedTps = Math.round((count / 5) * 10) / 10;
-    setTps(estimatedTps);
-  }, [transactions]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const fiveSecondsAgo = Date.now() - 5000;
-      txTimestamps.current = txTimestamps.current.filter((t) => t > fiveSecondsAgo);
-      const count = txTimestamps.current.length;
-      const estimatedTps = Math.round((count / 5) * 10) / 10;
-      setTps(estimatedTps);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleLogoClick = () => {
     window.location.reload();
@@ -72,13 +40,6 @@ export default function CheesyNav() {
         />
       </div>
       <div className="nav-right">
-        <div className="tps-pill">
-          <span className="tps-pill-dot-wrap">
-            <span className={`tps-pill-dot${tps > 0 ? " active" : ""}`} />
-          </span>
-          <span className="tps-pill-value">{tps > 0 ? tps.toFixed(1) : "—"}</span>
-          <span className="tps-pill-label">slices/s</span>
-        </div>
         <ConnectButton.Custom>
           {({ account, chain, openAccountModal, openChainModal, openConnectModal, mounted }) => {
             const ready = mounted;

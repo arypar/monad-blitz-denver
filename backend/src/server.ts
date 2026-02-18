@@ -1,6 +1,7 @@
+import { createServer, IncomingMessage, ServerResponse } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { config } from "./config.js";
-import { getCurrentRoundState, getPastWinners } from "./rounds.js";
+import { getCurrentRoundState, getPastWinners, isBettingCurrentlyOpen, getRoundTimeRemaining, getBettingTimeRemaining } from "./rounds.js";
 import type {
   ClassifiedTransaction,
   ClassifiedTransactionMessage,
@@ -14,11 +15,42 @@ import type {
 
 let wss: WebSocketServer | null = null;
 
-export function startServer(): WebSocketServer {
-  wss = new WebSocketServer({ port: config.wsPort });
+function handleHttpRequest(req: IncomingMessage, res: ServerResponse): void {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  wss.on("listening", () => {
-    console.log(`[server] WebSocket server listening on ws://localhost:${config.wsPort}`);
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/api/round") {
+    const roundState = getCurrentRoundState();
+    const body = JSON.stringify({
+      roundNumber: roundState.roundNumber,
+      isBettingOpen: isBettingCurrentlyOpen(),
+      roundTimeRemaining: getRoundTimeRemaining(),
+      bettingTimeRemaining: getBettingTimeRemaining(),
+      endsAt: roundState.endsAt,
+      bettingEndsAt: roundState.bettingEndsAt,
+    });
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(body);
+    return;
+  }
+
+  res.writeHead(404, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ error: "Not found" }));
+}
+
+export function startServer(): WebSocketServer {
+  const httpServer = createServer(handleHttpRequest);
+  wss = new WebSocketServer({ server: httpServer });
+
+  httpServer.listen(config.wsPort, () => {
+    console.log(`[server] HTTP + WebSocket server listening on port ${config.wsPort}`);
   });
 
   wss.on("connection", async (ws, req) => {

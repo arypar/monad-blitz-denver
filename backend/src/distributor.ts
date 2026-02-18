@@ -8,10 +8,6 @@ import { privateKeyToAccount } from "viem/accounts";
 import { config } from "./config.js";
 import type { ZoneId } from "./types.js";
 
-const CHEEZNAD_ADDRESS = "0xa02d5EE3B5462be694e7F6Fe9c101434399aD970" as const;
-
-const POLL_INTERVAL_MS = 20_000;
-
 const ZONE_TO_ENUM: Record<ZoneId, number> = {
   pepperoni: 0,
   mushroom: 1,
@@ -33,20 +29,6 @@ const monadTestnet = defineChain({
 });
 
 const cheeznadAbi = [
-  {
-    name: "getCurrentRoundPhase",
-    type: "function",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "string" }],
-  },
-  {
-    name: "canDistribute",
-    type: "function",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "bool" }],
-  },
   {
     name: "distribute",
     type: "function",
@@ -72,20 +54,6 @@ const cheeznadAbi = [
     type: "function",
     stateMutability: "view",
     inputs: [{ name: "_zone", type: "uint8" }],
-    outputs: [{ name: "", type: "uint256" }],
-  },
-  {
-    name: "getRoundTimeRemaining",
-    type: "function",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "uint256" }],
-  },
-  {
-    name: "getBettingTimeRemaining",
-    type: "function",
-    stateMutability: "view",
-    inputs: [],
     outputs: [{ name: "", type: "uint256" }],
   },
 ] as const;
@@ -115,15 +83,16 @@ function getClients() {
 export async function distributeWinnings(winner: ZoneId): Promise<void> {
   const zoneEnum = ZONE_TO_ENUM[winner];
   console.log(
-    `[distributor] queued distribution for winner: ${winner} (enum=${zoneEnum})`
+    `[distributor] distributing for winner: ${winner} (enum=${zoneEnum})`
   );
 
-  const { publicClient, walletClient, account } = getClients();
+  const { publicClient, walletClient } = getClients();
+  const contractAddress = config.contractAddress;
 
   async function hasDeposits(): Promise<boolean> {
     for (let i = 0; i < 5; i++) {
       const total = await publicClient.readContract({
-        address: CHEEZNAD_ADDRESS,
+        address: contractAddress,
         abi: cheeznadAbi,
         functionName: "getZoneTotal",
         args: [i],
@@ -133,114 +102,50 @@ export async function distributeWinnings(winner: ZoneId): Promise<void> {
     return false;
   }
 
-  async function tryDistribute(): Promise<boolean> {
-    const phase = await publicClient.readContract({
-      address: CHEEZNAD_ADDRESS,
-      abi: cheeznadAbi,
-      functionName: "getCurrentRoundPhase",
-    });
+  const deposits = await hasDeposits();
 
-    console.log(`[distributor] current contract phase: "${phase}"`);
-
-    if (phase !== "COMPLETE") {
-      return false;
-    }
-
-    const deposits = await hasDeposits();
-
-    if (!deposits) {
-      console.log(
-        `[distributor] no deposits in any zone — calling resetRound() to start fresh`
-      );
-
-      const txHash = await walletClient.writeContract({
-        address: CHEEZNAD_ADDRESS,
-        abi: cheeznadAbi,
-        functionName: "resetRound",
-      });
-
-      console.log(`[distributor] resetRound tx sent: ${txHash}`);
-
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash: txHash,
-      });
-
-      console.log(
-        `[distributor] resetRound confirmed in block ${receipt.blockNumber} (status: ${receipt.status})`
-      );
-
-      return true;
-    }
-
+  if (!deposits) {
     console.log(
-      `[distributor] phase is COMPLETE — calling distribute(${zoneEnum}) for ${winner}`
+      `[distributor] no deposits in any zone — calling resetRound() to start fresh`
     );
 
     const txHash = await walletClient.writeContract({
-      address: CHEEZNAD_ADDRESS,
+      address: contractAddress,
       abi: cheeznadAbi,
-      functionName: "distribute",
-      args: [zoneEnum],
+      functionName: "resetRound",
     });
 
-    console.log(`[distributor] distribute tx sent: ${txHash}`);
+    console.log(`[distributor] resetRound tx sent: ${txHash}`);
 
     const receipt = await publicClient.waitForTransactionReceipt({
       hash: txHash,
     });
 
     console.log(
-      `[distributor] distribute confirmed in block ${receipt.blockNumber} (status: ${receipt.status})`
+      `[distributor] resetRound confirmed in block ${receipt.blockNumber} (status: ${receipt.status})`
     );
 
-    return true;
+    return;
   }
 
-  // Try immediately first
-  try {
-    const done = await tryDistribute();
-    if (done) return;
-  } catch (err) {
-    console.error("[distributor] initial attempt failed:", err);
-  }
+  console.log(
+    `[distributor] calling distribute(${zoneEnum}) for ${winner}`
+  );
 
-  // Poll until the contract is ready
-  return new Promise<void>((resolve) => {
-    const interval = setInterval(async () => {
-      try {
-        const done = await tryDistribute();
-        if (done) {
-          clearInterval(interval);
-          resolve();
-        }
-      } catch (err) {
-        console.error("[distributor] poll attempt failed, will retry:", err);
-      }
-    }, POLL_INTERVAL_MS);
+  const txHash = await walletClient.writeContract({
+    address: contractAddress,
+    abi: cheeznadAbi,
+    functionName: "distribute",
+    args: [zoneEnum],
   });
-}
 
-export async function readContractTimers(): Promise<{
-  roundRemaining: number;
-  bettingRemaining: number;
-}> {
-  const { publicClient } = getClients();
+  console.log(`[distributor] distribute tx sent: ${txHash}`);
 
-  const [roundRaw, bettingRaw] = await Promise.all([
-    publicClient.readContract({
-      address: CHEEZNAD_ADDRESS,
-      abi: cheeznadAbi,
-      functionName: "getRoundTimeRemaining",
-    }),
-    publicClient.readContract({
-      address: CHEEZNAD_ADDRESS,
-      abi: cheeznadAbi,
-      functionName: "getBettingTimeRemaining",
-    }),
-  ]);
+  const receipt = await publicClient.waitForTransactionReceipt({
+    hash: txHash,
+  });
 
-  return {
-    roundRemaining: Number(roundRaw as bigint),
-    bettingRemaining: Number(bettingRaw as bigint),
-  };
+  console.log(
+    `[distributor] distribute confirmed in block ${receipt.blockNumber} (status: ${receipt.status})`
+  );
 }

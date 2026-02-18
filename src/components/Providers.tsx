@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider } from "wagmi";
 import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
 import { wagmiConfig } from "@/lib/wagmi";
+import ContractPoolProvider from "./ContractPoolProvider";
 import "@rainbow-me/rainbowkit/styles.css";
 
 const queryClient = new QueryClient();
@@ -19,7 +20,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
             borderRadius: "medium",
           })}
         >
-          {children}
+          <ContractPoolProvider>{children}</ContractPoolProvider>
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
