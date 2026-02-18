@@ -895,19 +895,18 @@ function ZonesRevealScene({ engine }: { engine: SynthEngine }) {
               </p>
 
               {/* Protocol tags */}
-              <div className="flex gap-2 mt-3 justify-center flex-wrap">
+              <div className="flex gap-1.5 mt-3 justify-center flex-wrap">
                 {ZONE_PROTOCOLS[ZONE_LIST[activeSlice].id].map((p, j) => (
                   <motion.span
                     key={p}
-                    className="text-[11px] px-3 py-1 rounded-full font-semibold"
+                    className="text-[10px] px-2.5 py-[3px] rounded-md font-bold tracking-wide"
                     style={{
-                      background: `rgba(${ZONE_LIST[activeSlice].colorRgb}, 0.1)`,
-                      color: ZONE_LIST[activeSlice].color,
-                      border: `1px solid rgba(${ZONE_LIST[activeSlice].colorRgb}, 0.2)`,
+                      background: "rgba(0,0,0,0.04)",
+                      color: "rgba(0,0,0,0.4)",
                     }}
-                    initial={{ opacity: 0, scale: 0, y: 10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    transition={{ delay: 0.3 + j * 0.1, type: "spring", stiffness: 300, damping: 15 }}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 + j * 0.08, type: "spring", stiffness: 350, damping: 18 }}
                   >
                     {p}
                   </motion.span>
@@ -1857,131 +1856,49 @@ function LaunchCtaScene({ chosenZone, engine }: { chosenZone: Zone; engine: Synt
         />
       ))}
 
-      {/* Logo */}
+      {/* Logo — big like the title screen */}
       <motion.div
-        className="z-10 mb-4"
-        initial={{ opacity: 0, scale: 0.4, y: 30 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="z-10 mb-8"
+        initial={{ opacity: 0, scale: 0.5 }}
+        animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.1, type: "spring", stiffness: 160, damping: 14 }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/assets/cheeznad.png"
           alt="Cheeznad"
-          style={{ width: 200, height: 200, objectFit: "contain" }}
+          className="w-[55vw] sm:w-[380px] max-w-none"
+          style={{ objectFit: "contain" }}
           draggable={false}
         />
       </motion.div>
 
-      {/* Headline */}
-      <motion.h2
-        className="text-2xl sm:text-3xl font-black z-10 mb-6 text-center"
+      {/* CTA Button */}
+      <motion.button
+        onClick={enter}
+        initial={{ opacity: 0, scale: 0.85, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{
+          delay: 0.4,
+          type: "spring",
+          stiffness: 200,
+          damping: 15,
+        }}
+        whileHover={{ scale: 1.04, y: -2 }}
+        whileTap={{ scale: 0.97 }}
+        className="relative z-10 rounded-full text-lg font-black tracking-wide cursor-pointer"
         style={{
+          padding: "16px 48px",
+          background: "#111",
+          color: "white",
+          border: "none",
           fontFamily: "var(--font-nunito), system-ui",
-          color: "#111",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
         }}
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2, type: "spring", stiffness: 200, damping: 16 }}
       >
-        The oven is ready.
-      </motion.h2>
+        Enter the Kitchen
+      </motion.button>
 
-      {/* Your zone card - wider and more prominent */}
-      <motion.div
-        className="z-10 mb-8 flex items-center gap-4 rounded-2xl px-6 py-4"
-        style={{
-          background: `linear-gradient(135deg, rgba(${chosenZone.colorRgb}, 0.08), rgba(${chosenZone.colorRgb}, 0.02))`,
-          border: `2px solid rgba(${chosenZone.colorRgb}, 0.15)`,
-          boxShadow: `0 4px 20px rgba(${chosenZone.colorRgb}, 0.08)`,
-          minWidth: 260,
-        }}
-        initial={{ opacity: 0, y: 15, scale: 0.9 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ delay: 0.3, type: "spring", stiffness: 200, damping: 16 }}
-      >
-        <motion.div
-          animate={{ rotate: [0, -6, 6, 0], y: [0, -3, 0] }}
-          transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={chosenZone.sliceImageHot}
-            alt={chosenZone.topping}
-            style={{
-              width: 56,
-              height: 56,
-              filter: `drop-shadow(0 4px 10px rgba(${chosenZone.colorRgb}, 0.3))`,
-            }}
-            draggable={false}
-          />
-        </motion.div>
-        <div>
-          <p
-            className="text-base font-black"
-            style={{
-              color: chosenZone.color,
-              fontFamily: "var(--font-nunito), system-ui",
-            }}
-          >
-            Betting on {chosenZone.topping}
-          </p>
-          <p className="text-xs font-medium" style={{ color: "rgba(0,0,0,0.35)" }}>
-            {chosenZone.name} &middot; {chosenZone.protocol}
-          </p>
-        </div>
-      </motion.div>
-
-      {/* Big CTA Button with glow */}
-      <motion.div className="relative z-10">
-        {/* Pulsing glow behind button */}
-        <motion.div
-          className="absolute inset-0 rounded-2xl"
-          style={{
-            background: chosenZone.color,
-            filter: "blur(20px)",
-            opacity: 0.2,
-          }}
-          animate={{ opacity: [0.15, 0.3, 0.15], scale: [0.95, 1.05, 0.95] }}
-          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.button
-          onClick={enter}
-          initial={{ opacity: 0, scale: 0.85, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{
-            delay: 0.5,
-            type: "spring",
-            stiffness: 200,
-            damping: 15,
-          }}
-          whileHover={{
-            scale: 1.06,
-            y: -2,
-          }}
-          whileTap={{ scale: 0.97 }}
-          className="relative px-12 py-5 rounded-2xl text-xl font-black tracking-wide cursor-pointer"
-          style={{
-            background: `linear-gradient(135deg, ${chosenZone.color}, ${chosenZone.color}cc)`,
-            color: "white",
-            border: "none",
-            fontFamily: "var(--font-nunito), system-ui",
-            boxShadow: `0 6px 24px rgba(${chosenZone.colorRgb}, 0.3), 0 2px 8px rgba(0,0,0,0.08)`,
-          }}
-        >
-          Enter the Kitchen
-        </motion.button>
-      </motion.div>
-
-      <motion.p
-        className="mt-5 text-[10px] tracking-[0.2em] uppercase z-10 font-medium"
-        style={{ color: "rgba(0,0,0,0.18)" }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1 }}
-      >
-        or press Enter
-      </motion.p>
     </motion.div>
   );
 }
